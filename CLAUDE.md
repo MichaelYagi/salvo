@@ -1,10 +1,20 @@
 # CLAUDE.md
 
-Context for Claude Code working on the Salvo project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this is
 
-Salvo is a local-first HTTP client — a lightweight Postman alternative. Single-page app, pure HTML/CSS/JS, no framework, no build step, no dependencies. Runs from a local web server (`python3 -m http.server 8080`).
+Salvo is a local-first HTTP client — a lightweight Postman alternative. Single-page app, pure HTML/CSS/JS, no framework, no build step, no dependencies. Runs from a local web server.
+
+## Running locally
+
+```bash
+python3 -m http.server 8080
+# or: npx serve .
+# then open http://localhost:8080
+```
+
+Must use a server — `file://` won't work due to browser security restrictions on script loading.
 
 ## Architecture
 
@@ -24,6 +34,8 @@ All JS files share the **global browser scope** and are loaded as plain `<script
 | `js/modals.js` | `openGitModal()`, `saveGitCfg()`, `gitPush()`, `gitPull()`, `setGitStatus()`, `openEnvModal()`, `closeEnvModal()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()`, `envSelect/Rename/SetVar/DelVar/AddVar/Use/Delete()`, `addEnv()`, `getSelEnv()` |
 | `js/app.js` | `init()`, `setupResizer()`, `toggleHistPanel()`, `renderHistPanel()`, `replayHistory()`, `clearHistory()` |
 
+> **Note:** `css/curl.js` is a stray file — it is not loaded by `index.html` and should be ignored. The active curl code is `js/curl.js`.
+
 ### CSS files and their responsibilities
 
 | File | Owns |
@@ -42,7 +54,7 @@ state = {
   cols:    [],          // array of Collection objects
   git:     { token, owner, repo, branch, path, auto },
   envs:    [],          // array of { id, name, vars: {} }
-  hist:    [],          // array of { method, url, status, elapsed }
+  hist:    [],          // array of { method, url, status, elapsed } — capped at 200
 
   // runtime only
   activeEnv:       'default',
@@ -105,22 +117,13 @@ state = {
 
 **`interp(s)`** — replaces `{{var}}` placeholders with values from the active environment. Call this in `send.js` when building the actual fetch request, not when storing/displaying.
 
-**`scheduleAutoSave()`** — debounces (500ms) saving `state.req` back into `state.cols` + `localStorage`. Call it from any function that mutates `state.req`. Don't call `persist()` directly from request editor functions.
+**`scheduleAutoSave()`** — debounces (500ms) saving `state.req` back into `state.cols` + `localStorage`, then chains into `scheduleAutoGitPush()` (2s debounce) if auto-sync is enabled. Call it from any function that mutates `state.req`. Don't call `persist()` directly from request editor functions.
 
 **`persist()`** — saves all four `state` slices to localStorage. Call it from collection CRUD operations, history updates, and settings saves. Not from per-keystroke handlers (use `scheduleAutoSave` instead).
 
 **Tab rendering** — `renderReqPanel()` is the single dispatcher for the request editor panel. Adding a new tab means: adding a button to `#req-tabbar` in `index.html`, adding a case in the `switch` in `renderReqPanel()`, and implementing the HTML-returning function.
 
 **Git sync** — `gitPush()` and `gitPull()` in `modals.js` use the GitHub Contents API (`PUT /repos/:owner/:repo/contents/:path`). Push requires fetching the current file SHA first to avoid conflicts. The payload is base64-encoded JSON of `state.cols`.
-
-## Running locally
-
-```bash
-python3 -m http.server 8080
-# then open http://localhost:8080
-```
-
-Must use a server — `file://` won't work due to browser security restrictions on script loading.
 
 ## Things to be aware of
 

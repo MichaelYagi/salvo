@@ -145,6 +145,20 @@ async function parseResponse(res, elapsed) {
     };
   }
 
+  const isText = !ct || ct.startsWith('text/') || ct.includes('json') || ct.includes('xml') || ct.includes('javascript');
+  if (!isText) {
+    const blob = await res.blob();
+    return {
+      status:     res.status,
+      statusText: res.statusText,
+      headers:    respHeaders,
+      body:       null,
+      bodyType:   'binary',
+      elapsed,
+      size:       blob.size,
+    };
+  }
+
   let text     = await res.text();
   let bodyType = 'text';
 

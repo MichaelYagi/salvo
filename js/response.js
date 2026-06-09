@@ -64,6 +64,13 @@ function renderRespPanel() {
       return;
     }
 
+    if (resp.bodyType === 'binary') {
+      copyBtn.style.display = 'none';
+      const ct = resp.headers['content-type'] || 'application/octet-stream';
+      wrap.innerHTML = `<span class="muted">Binary response (${esc(ct)}) — preview not supported</span>`;
+      return;
+    }
+
     if (resp.bodyType === 'json') {
       try {
         wrap.innerHTML = '';
@@ -120,8 +127,16 @@ function buildJsonTree(data, depth) {
   const toggle   = document.createElement('span');
   toggle.className = 'jt-toggle';
 
+  const openBracket = document.createElement('span');
+  openBracket.style.color = '#8b949e';
+  openBracket.textContent = isArr ? '[' : '{';
+
   const children = document.createElement('div');
   children.className = 'jt-children';
+
+  const closeBracket = document.createElement('span');
+  closeBracket.style.color = '#8b949e';
+  closeBracket.textContent = isArr ? ']' : '}';
 
   function preview() {
     if (isArr) return `▸ [… ${keys.length}]`;
@@ -130,8 +145,10 @@ function buildJsonTree(data, depth) {
   }
 
   function renderToggle() {
-    toggle.textContent        = open ? '▾' : preview();
-    children.style.display    = open ? ''  : 'none';
+    toggle.textContent           = open ? '▾' : preview();
+    openBracket.style.display    = open ? ''  : 'none';
+    children.style.display       = open ? ''  : 'none';
+    closeBracket.style.display   = open ? ''  : 'none';
   }
 
   keys.forEach((k, i) => {
@@ -166,6 +183,8 @@ function buildJsonTree(data, depth) {
   renderToggle();
 
   wrap.appendChild(toggle);
+  wrap.appendChild(openBracket);
   wrap.appendChild(children);
+  wrap.appendChild(closeBracket);
   return wrap;
 }
