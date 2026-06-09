@@ -1,0 +1,93 @@
+// ─── cURL Generator ───────────────────────────────────────────────────────────
+
+function buildCurl() {
+  const r = state.req;
+  if (!r || !r.url) return '';
+
+  const parts = ['curl'];
+
+  // Method (omit -X for GET since it's the default)
+  if (r.method !== 'GET') {
+    parts.push(`-X ${r.method}`);
+  }
+
+  // URL + query params
+  let rawUrl = interp(r.url);
+  if (!rawUrl.match(/^https?:\/\//i)) rawUrl = 'https://' + rawUrl;
+  try {
+    const urlObj = new URL(rawUrl);
+    r.params
+      .filter(p => p.enabled && p.key)
+      .forEach(p => urlObj.searchParams.set(interp(p.key), interp(p.value)));
+    rawUrl = urlObj.toString();
+  } catch { /* URL still being typed */ }
+  parts.push(`'${rawUrl}'`);
+
+  // Auth
+  const auth = r.auth;
+  if (auth.type === 'bearer' && auth.token) {
+    parts.push(`-H 'Authorization: Bearer ${interp(auth.token)}'`);
+  } else if (auth.type === 'basic' && (auth.username || auth.password)) {
+    parts.push(`-u '${auth.username}:${auth.password}'`);
+  } else if (auth.type === 'apikey' && auth.apiKey) {
+    parts.push(`-H '${auth.apiKey}: ${auth.apiValue}'`);
+  }
+
+  // Headers
+  r.headers
+    .filter(h => h.enabled && h.key)
+    .forEach(h => parts.push(`-H '${interp(h.key)}: ${interp(h.value)}'`));
+
+  // Body
+  const body = r.body;
+  if (body.type === 'raw' && body.raw) {
+    const hasContentType = r.headers.some(h => h.enabled && h.key.toLowerCase() === 'content-type');
+    if (!hasContentType) {
+      const ct = body.contentType === 'json' ? 'application/json'
+               : body.contentType === 'xml'  ? 'application/xml'
+               : body.contentType === 'html' ? 'text/html'
+               :                               'text/plain';
+      parts.push(`-H 'Content-Type: ${ct}'`);
+    }
+    const escaped = interp(body.raw).replace(/'/g, `'\\''`);
+    parts.push(`-d '${escaped}'`);
+  }
+  if (body.type === 'formdata') {
+    body.formData
+      .filter(f => f.enabled && f.key)
+      .forEach(f => parts.push(`-F '${f.key}=${f.value}'`));
+  }
+  if (body.type === 'urlencoded') {
+    const pairs = body.formData
+      .filter(f => f.enabled && f.key)
+      .map(f => `${encodeURIComponent(f.key)}=${encodeURIComponent(f.value)}`)
+      .join('&');
+    if (pairs) parts.push(`--data-urlencode '${pairs}'`);
+  }
+
+  // One flag per line for readability
+  return parts.join(' \\\n  ');
+}
+
+// ─── Tab panel HTML ───────────────────────────────────────────────────────────
+
+function curlPanelHTML() {
+  const cmd = buildCurl();
+  if (!cmd) return `<p class="muted">Enter a URL to see the curl command.</p>`;
+
+  return `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn-primary" onclick="copyCurl()" style="font-size:11px;padding:4px 12px">Copy</button>
+    </div>
+    <pre id="curl-output" style="margin:0;background:#0d1117;border:1px solid #21262d;border-radius:4px;
+         padding:12px 14px;font-family:monospace;font-size:12px;line-height:1.7;
+         color:#c9d1d9;white-space:pre-wrap;word-break:break-all">${esc(cmd)}</pre>`;
+}
+
+// ─── Copy to clipboard ────────────────────────────────────────────────────────
+
+function copyCurl() {
+  const cmd = buildCurl();
+  if (!cmd) return;
+  navigator.clipboard.writeText(cmd).then(() => notify('curl copied', 'success'));
+}

@@ -1,0 +1,80 @@
+/* ─── Empty State ───────────────────────────────────────────────────────────── */
+#empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #484f58;
+}
+#empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+#empty-state h3    { font-size: 15px; font-weight: 500; color: #6e7681; margin-bottom: 6px; }
+
+/* ─── URL Bar ───────────────────────────────────────────────────────────────── */
+#url-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #21262d;
+  flex-shrink: 0;
+}
+#url-bar select { width: 96px; font-weight: 700; padding: 5px 4px; flex-shrink: 0; }
+#url-bar input  { flex: 1; font-size: 13px; font-family: monospace; padding: 5px 10px; }
+#send-btn       { flex-shrink: 0; }
+
+/* ─── Request Name Input (in tab bar) ──────────────────────────────────────── */
+#req-name-input {
+  margin: 5px 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  width: 180px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+#req-name-input:focus { border-color: #30363d; }
+
+/* ─── KV Editor (params / headers / form fields) ───────────────────────────── */
+.kv-grid {
+  display: grid;
+  grid-template-columns: 18px 1fr 1fr 22px;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.kv-grid input { width: 100%; font-family: monospace; font-size: 11px; }
+
+/* params + headers get an extra notes column */
+.kv-grid-notes {
+  display: grid;
+  grid-template-columns: 18px 1fr 1fr 0.6fr 22px;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.kv-grid-notes input { width: 100%; font-family: monospace; font-size: 11px; }
+
+.kv-note             { font-family: inherit !important; color: #8b949e !important; font-style: italic; }
+.kv-note::placeholder { color: #484f58; font-style: italic; }
+
+.kv-del          { color: #f85149 !important; font-size: 15px; padding: 2px 4px; }
+.kv-del:hover    { background: #2d0f0f !important; }
+.kv-add          { color: #00d9c8; margin-top: 4px; }
+.kv-add:hover    { background: none !important; opacity: .8; }
+
+/* ─── Body Editor ───────────────────────────────────────────────────────────── */
+.body-types             { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.body-types label       { display: flex; align-items: center; gap: 5px; cursor: pointer; color: #8b949e; }
+.body-types label.active-type { color: #00d9c8; }
+
+#body-raw-area {
+  width: 100%;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 150px;
+  padding: 8px;
+}
+
+/* ─── Auth Editor ───────────────────────────────────────────────────────────── */
+.auth-row        { margin-bottom: 12px; }
+.auth-row select { width: auto; min-width: 160px; }

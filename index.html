@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Salvo</title>
+
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/request.css">
+  <link rel="stylesheet" href="css/response.css">
+  <link rel="stylesheet" href="css/modals.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Topbar ─────────────────────────────────────────────────────────── -->
+  <div id="topbar">
+    <span class="logo">Salvo</span>
+    <span class="tb-div">|</span>
+    <select id="env-select" style="width:150px;padding:3px 7px;font-size:12px"></select>
+    <button onclick="openEnvModal()">Manage Env</button>
+    <div class="sep"></div>
+    <span id="git-status" style="font-size:11px;color:#8b949e"></span>
+    <button onclick="gitPull()">↓ Pull</button>
+    <button onclick="gitPush()">↑ Push</button>
+    <button onclick="openGitModal()">⚙ Git</button>
+  </div>
+
+  <!-- ── Workspace ──────────────────────────────────────────────────────── -->
+  <div id="workspace">
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sb-search-row">
+        <input id="search-input" placeholder="Search…" oninput="renderSidebar()">
+        <button id="search-clear" style="display:none;color:#f85149;padding:0 5px"
+                onclick="document.getElementById('search-input').value='';renderSidebar();this.style.display='none'">✕</button>
+      </div>
+      <div id="sb-actions">
+        <button class="btn-primary" onclick="addCollection()">+ New</button>
+        <label style="display:flex;align-items:center;justify-content:center;flex:1;background:#21262d;
+                      border:1px solid #30363d;border-radius:4px;cursor:pointer;padding:4px 0;
+                      font-size:11px;color:#c9d1d9">
+          Import
+          <input type="file" accept=".json" onchange="importFile(event)" style="display:none">
+        </label>
+      </div>
+      <div id="col-list"></div>
+      <div id="sb-bottom">
+        <button id="hist-toggle" onclick="toggleHistPanel()">⏱ History</button>
+      </div>
+    </div>
+
+    <!-- Drag-resize handle -->
+    <div id="resizer"></div>
+
+    <!-- Main content area -->
+    <div id="main">
+
+      <!-- Empty state -->
+      <div id="empty-state">
+        <div class="icon">⬡</div>
+        <h3>Select or create a request</h3>
+        <span>Use the sidebar to get started</span>
+      </div>
+
+      <!-- Request editor (hidden until a request is selected) -->
+      <div id="req-editor" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+        <!-- URL bar -->
+        <div id="url-bar">
+          <select id="method-select" onchange="onMethodChange()">
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>DELETE</option>
+            <option>HEAD</option>
+            <option>OPTIONS</option>
+          </select>
+          <input id="url-input" type="text"
+                 placeholder="https://api.example.com/endpoint {{var}}"
+                 oninput="state.req.url=this.value;scheduleAutoSave();renderReqPanel()"
+                 onkeydown="if(event.key==='Enter')sendRequest()">
+          <button id="send-btn" class="btn-primary" onclick="sendRequest()">Send</button>
+        </div>
+
+        <!-- Request tabs: Params / Headers / Auth / Body / cURL -->
+        <div class="tabbar" id="req-tabbar">
+          <button class="tab active" data-tab="params"  onclick="switchReqTab('params')">Params</button>
+          <button class="tab"        data-tab="headers" onclick="switchReqTab('headers')">Headers</button>
+          <button class="tab"        data-tab="auth"    onclick="switchReqTab('auth')">Auth</button>
+          <button class="tab"        data-tab="body"    onclick="switchReqTab('body')">Body</button>
+          <button class="tab"        data-tab="curl"    onclick="switchReqTab('curl')">cURL</button>
+          <div class="sep"></div>
+          <input id="req-name-input"
+                 oninput="onReqNameChange(this.value)"
+                 onfocus="this.style.border='1px solid #30363d'"
+                 onblur="this.style.border='1px solid transparent'">
+        </div>
+
+        <!-- Request panel (params / headers / auth / body / curl) -->
+        <div id="req-panel" class="panel"></div>
+
+        <!-- Response section -->
+        <div id="resp-section">
+          <div id="resp-header">
+            <span class="resp-label">RESPONSE</span>
+            <span id="status-badge" style="display:none"></span>
+            <span id="resp-time"    style="font-size:11px;color:#8b949e;display:none"></span>
+            <span id="resp-size"    style="font-size:11px;color:#8b949e;display:none"></span>
+            <div class="sep"></div>
+            <button class="tab active" data-rtab="body"    onclick="switchRespTab('body')"    style="padding:3px 10px">Body</button>
+            <button class="tab"        data-rtab="headers" onclick="switchRespTab('headers')" style="padding:3px 10px">Headers</button>
+            <button id="copy-resp-btn" onclick="copyResponse()" style="font-size:11px;display:none">Copy</button>
+          </div>
+          <div id="resp-body-wrap">
+            <span class="muted">Press Send to execute the request</span>
+          </div>
+        </div>
+
+      </div><!-- #req-editor -->
+
+      <!-- History panel (shown via toggle) -->
+      <div id="hist-panel" style="display:none">
+        <div class="hist-header">
+          <span class="hist-label">HISTORY</span>
+          <button onclick="clearHistory()" style="color:#f85149;font-size:11px">Clear</button>
+        </div>
+        <div id="hist-list"></div>
+      </div>
+
+    </div><!-- #main -->
+
+  </div><!-- #workspace -->
+
+</div><!-- #app -->
+
+<!-- ── Git Settings Modal ────────────────────────────────────────────────── -->
+<div id="git-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <h3>Git Sync — GitHub</h3>
+    <p>Collections sync to a single JSON file in your GitHub repo. Never Postman cloud.</p>
+
+    <label>GitHub Personal Access Token (needs <code>repo</code> scope)</label>
+    <input id="git-token" type="password" placeholder="ghp_…">
+
+    <label>Owner / Organization</label>
+    <input id="git-owner" placeholder="your-username">
+
+    <label>Repository</label>
+    <input id="git-repo" placeholder="my-api-collections">
+
+    <label>Branch</label>
+    <input id="git-branch" placeholder="main">
+
+    <label>File path in repo</label>
+    <input id="git-path" placeholder="salvo.json">
+
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:20px">
+      <input id="git-auto" type="checkbox">
+      Auto-push on every change (2 s debounce)
+    </label>
+
+    <div class="modal-footer">
+      <button onclick="document.getElementById('git-modal').style.display='none'">Cancel</button>
+      <button class="btn-primary" onclick="saveGitCfg()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Environment Modal ─────────────────────────────────────────────────── -->
+<div id="env-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)closeEnvModal()">
+  <div class="modal" style="min-width:580px;max-width:680px" onclick="event.stopPropagation()">
+    <h3>Environments</h3>
+    <div class="env-layout">
+      <div class="env-list" id="env-list-panel"></div>
+      <div id="env-detail-panel"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Context Menu (positioned by JS) ──────────────────────────────────── -->
+<div id="ctx-menu" class="ctx-menu" style="display:none"></div>
+
+<!-- ── JavaScript — load order matters ──────────────────────────────────── -->
+<script src="js/state.js"></script>       <!-- constants, state, storage, utils  -->
+<script src="js/sidebar.js"></script>     <!-- sidebar rendering & context menus -->
+<script src="js/curl.js"></script>        <!-- curl command generation            -->
+<script src="js/request.js"></script>     <!-- request editor panels             -->
+<script src="js/response.js"></script>    <!-- response panel & JSON tree        -->
+<script src="js/send.js"></script>        <!-- fetch execution                   -->
+<script src="js/collections.js"></script> <!-- collection / folder / req CRUD    -->
+<script src="js/modals.js"></script>      <!-- git & env modals                  -->
+<script src="js/app.js"></script>         <!-- init, resizer, history            -->
+
+</body>
+</html>
