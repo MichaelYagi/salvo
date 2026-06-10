@@ -23,6 +23,7 @@
 
   <!-- ── Topbar ─────────────────────────────────────────────────────────── -->
   <div id="topbar">
+    <button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
     <img src="img/favicon.svg" alt="" width="20" height="20" style="vertical-align:middle;border-radius:4px;margin-right:6px">
     <span class="logo">Salvo</span>
     <span class="tb-div">|</span>
@@ -56,6 +57,9 @@
         <button id="hist-toggle" onclick="toggleHistPanel()">⏱ History</button>
       </div>
     </div>
+
+    <!-- Sidebar overlay (mobile only, closes sidebar on tap) -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <!-- Drag-resize handle -->
     <div id="resizer"></div>
@@ -148,7 +152,7 @@
 <!-- ── Environment Modal ─────────────────────────────────────────────────── -->
 <div id="env-modal" class="modal-bg" style="display:none"
      onclick="if(event.target===this)closeEnvModal()">
-  <div class="modal" style="min-width:580px;max-width:680px" onclick="event.stopPropagation()">
+  <div class="modal env-modal" onclick="event.stopPropagation()">
     <h3>Environments</h3>
     <div class="env-layout">
       <div class="env-list" id="env-list-panel"></div>

@@ -1,3 +1,13 @@
+// ─── Mobile Sidebar Drawer ─────────────────────────────────────────────────────
+
+function toggleSidebar() {
+  document.body.classList.toggle('sidebar-open');
+}
+
+function closeSidebar() {
+  document.body.classList.remove('sidebar-open');
+}
+
 // ─── Click Selection ─────────────────────────────────────────────────────────
 
 function reqClick(event, reqId) {

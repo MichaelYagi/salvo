@@ -48,6 +48,23 @@ html, body {
 .tb-div  { color: #30363d; font-size: 20px; line-height: 1; }
 .sep     { flex: 1; }
 
+/* ─── Sidebar Toggle (mobile only) ──────────────────────────────────────────── */
+#sidebar-toggle {
+  display: none;
+  font-size: 16px;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+/* ─── Sidebar Overlay (mobile only) ─────────────────────────────────────────── */
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 399;
+}
+
 /* ─── Form Controls ────────────────────────────────────────────────────────── */
 input, select, textarea {
   background: #161b22;
@@ -126,3 +143,27 @@ button:hover { background: #21262d; color: #c9d1d9; }
 .spinner span:nth-child(3) { animation-delay: .4s; }
 
 @keyframes rf-pulse { 0%, 80%, 100% { opacity: .15; } 40% { opacity: 1; } }
+
+/* ─── Responsive (tablet & phone) ───────────────────────────────────────────── */
+@media (max-width: 860px) {
+  #sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; }
+
+  #topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 44px;
+    padding: 6px 10px;
+    row-gap: 6px;
+  }
+
+  /* Let the env controls and save status drop to their own row, full width */
+  #env-select   { flex: 1 1 auto; min-width: 0; }
+  #save-status  { order: 5; flex-basis: 100%; }
+
+  body.sidebar-open #sidebar-overlay { display: block; }
+}
+
+@media (max-width: 480px) {
+  #topbar .logo { display: none; }
+  #save-status  { display: none; }
+}

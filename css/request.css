@@ -119,3 +119,19 @@
 /* ─── Auth Editor ───────────────────────────────────────────────────────────── */
 .auth-row        { margin-bottom: 12px; }
 .auth-row select { width: auto; min-width: 160px; }
+
+/* ─── Responsive (tablet & phone) ───────────────────────────────────────────── */
+@media (max-width: 860px) {
+  #url-bar select { width: 76px; }
+  #url-bar input  { min-width: 0; }
+
+  #req-name-input { width: 120px; }
+
+  .req-tab-name { max-width: 90px; }
+
+  .two-col { grid-template-columns: 1fr; }
+
+  .kv-grid,
+  .kv-grid-notes { gap: 4px; }
+  .kv-grid-notes { grid-template-columns: 18px 1fr 1fr 0.8fr 22px; }
+}

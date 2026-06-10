@@ -10,6 +10,7 @@ function openTab(reqId) {
     state.activeTabId = existing.id;
     renderSidebar();
     showReqEditor();
+    closeSidebar();
     return;
   }
 
@@ -31,6 +32,7 @@ function openTab(reqId) {
   state.activeTabId = tab.id;
   renderSidebar();
   showReqEditor();
+  closeSidebar();
 }
 
 function closeTab(tabId, event) {

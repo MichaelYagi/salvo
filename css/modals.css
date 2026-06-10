@@ -30,6 +30,7 @@
 .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 
 /* ─── Environment Modal ─────────────────────────────────────────────────────── */
+.env-modal  { min-width: 580px; max-width: 680px; }
 .env-layout { display: grid; grid-template-columns: 170px 1fr; gap: 16px; min-height: 300px; }
 
 .env-list   { border-right: 1px solid #21262d; padding-right: 12px; }
@@ -64,3 +65,14 @@
 .notif.success { background: #0d2d1a; border: 1px solid #3fb950; color: #3fb950; }
 .notif.error   { background: #2d0f0f; border: 1px solid #f85149; color: #f85149; }
 .notif.info    { background: #0d1b2e; border: 1px solid #58a6ff; color: #58a6ff; }
+
+/* ─── Responsive (tablet & phone) ───────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .modal-bg     { padding: 12px; }
+  .modal        { min-width: 0; max-width: 100%; padding: 16px; }
+  .env-modal    { min-width: 0; max-width: 100%; }
+  .env-layout   { grid-template-columns: 1fr; min-height: 0; }
+  .env-list     { border-right: none; border-bottom: 1px solid #21262d; padding-right: 0; padding-bottom: 12px; margin-bottom: 12px; }
+
+  .notif { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+}
