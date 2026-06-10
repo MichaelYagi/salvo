@@ -11,6 +11,9 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 - **Full request editing** — method, URL, query params, headers, auth, and body (raw JSON/XML/text, form-data, x-www-form-urlencoded)
 - **Auth** — Bearer Token, Basic Auth, API Key, OAuth 2.0 (Client Credentials & Password Grant), Digest Auth, and JWT Bearer (HS256)
 - **Environment variables** — `{{variable}}` placeholders are resolved from the active environment when sending. Switch environments from the topbar dropdown, or manage them via "Manage Env".
+- **Save response values as variables** — hover any value in the response's JSON tree and click `→{{}}` to save it straight into the active environment.
+- **Pre-request & test scripts** — run JavaScript before a request is sent or after its response arrives, via a small `pm`-style API. Extract values into environment variables, assert on the response with `pm.test`/`pm.expect`, and see pass/fail results in a "Tests" tab.
+- **Cookie jar** — `Set-Cookie` responses are stored automatically and replayed on later requests to matching domains. View or clear stored cookies from the "Cookies" topbar button.
 - **Response viewer** — status, timing, size, collapsible JSON tree, raw body, response headers. Large JSON responses (>1MB) fall back to raw text to avoid freezing the tab.
 - **cURL tab** — live curl equivalent for every request, updates as you type, one-click copy
 - **Notes on params/headers** — annotate individual rows ("Dev key", "pagination cursor", etc.)
@@ -70,7 +73,7 @@ All JS files share the global scope and load in order. `state.js` must be first 
 - **Collections are directories**: `data/<Collection Name>/`
 - **Requests are files**: `data/<Collection Name>/<Request Name>.json`
 - **Folders are not directories** — a request inside a Postman-style folder just has an extra `"folder": "<Folder Name>"` field; the layout on disk is always flat, one level deep.
-- **Environments and history**: `data/_salvo/envs.json` and `data/_salvo/history.json`
+- **Environments, history, open tabs, and cookies**: `data/_salvo/envs.json`, `data/_salvo/history.json`, `data/_salvo/tabs.json`, and `data/_salvo/cookies.json`
 
 ### Request shape
 
@@ -94,7 +97,9 @@ All JS files share the global scope and load in order. `state.js` must be first 
     "accessTokenUrl": "", "clientId": "", "clientSecret": "", "scope": "",
     "cachedToken": "", "cachedExpiry": 0,
     "jwtSecret": "", "jwtPayload": "{\"sub\":\"user123\"}"
-  }
+  },
+  "preRequestScript": "pm.environment.set('timestamp', Date.now());",
+  "testScript": "pm.test('status is 200', () => pm.expect(pm.response.status).toBe(200));"
 }
 ```
 
@@ -109,6 +114,10 @@ Use `{{variable}}` placeholders anywhere in a request's URL, params, headers, or
 
 `{{userId}}` would come from another environment variable, or you can leave params un-interpolated for ones you fill in per-request. Switching environments from the topbar dropdown instantly changes what every `{{...}}` placeholder resolves to — handy for flipping between dev/staging/prod without editing requests.
 
+### Saving response values as variables
+
+After sending a request, expand the JSON tree in the response viewer and hover over any leaf value (string, number, boolean, null). A `→{{}}` button appears — click it to save that value into the active environment under a variable name you choose. The same thing can be done from a test script with `pm.environment.set(...)` (see below).
+
 ## Auth types
 
 Configure auth on the **Auth** tab of a request. Salvo supports:
@@ -122,6 +131,55 @@ Configure auth on the **Auth** tab of a request. Salvo supports:
 - **JWT Bearer (HS256)** — set a **Secret** and a JSON **payload** (e.g. `{"sub":"user123"}`). Salvo signs a fresh HS256 JWT at send time, adding `iat`/`exp` (1 hour) automatically if you don't specify them, and sends it as `Authorization: Bearer <jwt>`.
 
 For OAuth2, the fetched token is cached on the request (`cachedToken`/`cachedExpiry`) and reused until it expires.
+
+## Pre-request & Test Scripts
+
+Each request has a **Scripts** tab with two editors: a **pre-request script**, run just before the request is sent, and a **test script**, run after the response arrives. Both are plain JavaScript with access to a small `pm` object, similar to Postman's sandbox.
+
+### `pm` API
+
+- `pm.environment.get(key)` — read a variable from the active environment
+- `pm.environment.set(key, value)` — create or update a variable in the active environment
+- `pm.environment.unset(key)` — remove a variable
+- `pm.response.status` / `pm.response.statusText` — response status (test scripts only)
+- `pm.response.headers` — response headers object (test scripts only)
+- `pm.response.responseTime` — elapsed time in ms (test scripts only)
+- `pm.response.json()` — parse the response body as JSON (test scripts only)
+- `pm.response.text()` — raw response body as a string (test scripts only)
+- `pm.test(name, fn)` — register a named test; `fn` throwing marks it failed
+- `pm.expect(value)` — chainable matchers: `.toBe()`, `.toEqual()`, `.toBeTruthy()`, `.toBeFalsy()`, `.toBeDefined()`, `.toBeNull()`, `.toContain()`, `.toHaveProperty()`, `.toBeGreaterThan()`, `.toBeLessThan()`, plus `.not` to negate any of them
+
+### Example: pre-request script
+
+Set a fresh timestamp on every send:
+
+```js
+pm.environment.set('timestamp', Date.now());
+```
+
+### Example: test script
+
+Assert on the response and pull a value into an environment variable for later requests:
+
+```js
+pm.test('status is 200', () => {
+  pm.expect(pm.response.status).toBe(200);
+});
+
+pm.test('response is not an error', () => {
+  pm.expect(pm.response.json()).not.toHaveProperty('error');
+});
+
+pm.environment.set('userId', pm.response.json().id);
+```
+
+Test results show up in a **Tests** tab in the response panel, with a pass/fail count badge. Scripts that throw outside of `pm.test()` (a syntax error, etc.) show up as a single failed test.
+
+## Cookie Jar
+
+Salvo keeps a server-side cookie jar at `data/_salvo/cookies.json`. Whenever a response includes `Set-Cookie` headers, the cookies are parsed and stored automatically; on later requests, any stored cookie whose domain, path, expiry, and `Secure` flag match the request URL is sent back in the `Cookie` header — no manual copying of session cookies between requests.
+
+Click **Cookies** in the topbar to open the cookie jar modal, where you can see every stored cookie's name, value, domain/path, and expiry, delete individual cookies, or clear the jar entirely.
 
 ## Tabs
 

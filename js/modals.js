@@ -90,3 +90,68 @@ function envDelete() {
 function getSelEnv() {
   return state.envs.find(e => e.id === state.envSelId) ?? null;
 }
+
+// ─── Cookie Jar Modal ─────────────────────────────────────────────────────────
+
+let _cookieJar = [];
+
+async function openCookiesModal() {
+  document.getElementById('cookies-modal').style.display = 'flex';
+  await renderCookiesModal();
+}
+
+function closeCookiesModal() {
+  document.getElementById('cookies-modal').style.display = 'none';
+}
+
+async function renderCookiesModal() {
+  const list = document.getElementById('cookies-list');
+  list.innerHTML = `<p class="muted">Loading…</p>`;
+
+  try {
+    const res  = await fetch('/api/cookies');
+    const data = await res.json();
+    _cookieJar = data.cookies || [];
+  } catch (e) {
+    list.innerHTML = `<p class="muted">Failed to load cookies: ${esc(e.message)}</p>`;
+    return;
+  }
+
+  if (!_cookieJar.length) {
+    list.innerHTML = `<p class="muted">No cookies stored yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = _cookieJar.map((c, i) => `
+    <div class="cookie-item">
+      <div class="cookie-main">
+        <span class="cookie-name">${esc(c.name)}</span>
+        <span class="cookie-domain">${esc(c.domain)}${esc(c.path)}</span>
+        <button class="cookie-del" onclick="deleteCookie(${i})" title="Delete cookie">✕</button>
+      </div>
+      <div class="cookie-value">${esc(c.value)}</div>
+      <div class="cookie-expires">${c.expires ? 'Expires ' + new Date(c.expires).toLocaleString() : 'Session cookie'}</div>
+    </div>`
+  ).join('');
+}
+
+async function deleteCookie(i) {
+  const c = _cookieJar[i];
+  if (!c) return;
+  await fetch('/api/cookies', {
+    method:  'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ domain: c.domain, path: c.path, name: c.name }),
+  });
+  renderCookiesModal();
+}
+
+async function clearAllCookies() {
+  if (!confirm('Delete all stored cookies?')) return;
+  await fetch('/api/cookies', {
+    method:  'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({}),
+  });
+  renderCookiesModal();
+}

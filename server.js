@@ -63,6 +63,79 @@ function uniqueName(base, used) {
   return name;
 }
 
+// ─── Cookie jar (data/_salvo/cookies.json) ──────────────────────────────────────
+// Persisted as a flat array of { domain, path, name, value, expires, secure }.
+// `expires` is a ms-epoch timestamp or null for session cookies.
+
+const COOKIES_FILE = path.join(SALVO_DIR, 'cookies.json');
+
+function loadCookies() {
+  try { return JSON.parse(fs.readFileSync(COOKIES_FILE, 'utf8')); } catch { return []; }
+}
+
+function saveCookies(jar) {
+  fs.mkdirSync(SALVO_DIR, { recursive: true });
+  fs.writeFileSync(COOKIES_FILE, JSON.stringify(jar, null, 2));
+}
+
+// Does `cookie` apply to the given request URL?
+function cookieMatches(cookie, urlObj) {
+  if (cookie.expires && Date.now() > cookie.expires) return false;
+  if (cookie.secure && urlObj.protocol !== 'https:') return false;
+
+  const host = urlObj.hostname;
+  if (host !== cookie.domain && !host.endsWith('.' + cookie.domain)) return false;
+
+  const reqPath = urlObj.pathname || '/';
+  const cPath   = cookie.path || '/';
+  if (reqPath !== cPath && !reqPath.startsWith(cPath.endsWith('/') ? cPath : cPath + '/')) return false;
+
+  return true;
+}
+
+// Parse a single `Set-Cookie` header value into a jar entry.
+function parseSetCookie(str, defaultDomain) {
+  const parts = String(str).split(';').map(p => p.trim()).filter(Boolean);
+  if (!parts.length) return null;
+
+  const eq = parts[0].indexOf('=');
+  if (eq === -1) return null;
+
+  const cookie = {
+    name:    parts[0].slice(0, eq).trim(),
+    value:   parts[0].slice(eq + 1).trim(),
+    domain:  defaultDomain,
+    path:    '/',
+    expires: null,
+    secure:  false,
+  };
+
+  for (const attr of parts.slice(1)) {
+    const aEq = attr.indexOf('=');
+    const key = (aEq === -1 ? attr : attr.slice(0, aEq)).toLowerCase();
+    const val = aEq === -1 ? '' : attr.slice(aEq + 1).trim();
+
+    if      (key === 'domain'  && val) cookie.domain = val.replace(/^\./, '');
+    else if (key === 'path'    && val) cookie.path = val;
+    else if (key === 'expires' && val) { const t = Date.parse(val); if (!isNaN(t)) cookie.expires = t; }
+    else if (key === 'max-age' && val) { const n = parseInt(val, 10); if (!isNaN(n)) cookie.expires = Date.now() + n * 1000; }
+    else if (key === 'secure')         cookie.secure = true;
+  }
+
+  return cookie;
+}
+
+// Insert/update/remove a cookie in the jar (matched by domain+path+name).
+function updateJarCookie(jar, cookie) {
+  const idx = jar.findIndex(c => c.domain === cookie.domain && c.path === cookie.path && c.name === cookie.name);
+  if (cookie.expires !== null && cookie.expires <= Date.now()) {
+    if (idx !== -1) jar.splice(idx, 1);
+    return;
+  }
+  if (idx !== -1) jar[idx] = cookie;
+  else jar.push(cookie);
+}
+
 // ─── Digest auth (RFC 2617) ─────────────────────────────────────────────────────
 
 function parseDigestChallenge(header) {
@@ -259,6 +332,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (u.pathname === '/api/cookies' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ cookies: loadCookies() }));
+    return;
+  }
+
+  if (u.pathname === '/api/cookies' && req.method === 'DELETE') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { domain, path: cPath, name } = JSON.parse(body || '{}');
+        let jar = loadCookies();
+        jar = (!domain && !name)
+          ? []
+          : jar.filter(c => !(c.domain === domain && c.path === cPath && c.name === name));
+        saveCookies(jar);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, cookies: jar }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   if (u.pathname === '/api/proxy' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -281,6 +381,17 @@ const server = http.createServer((req, res) => {
           return undefined;
         }
 
+        // Attach cookies from the jar that match this request's URL.
+        const reqUrl = new URL(url);
+        const jar     = loadCookies();
+        const matched = jar.filter(c => cookieMatches(c, reqUrl));
+        if (matched.length) {
+          const cookieStr  = matched.map(c => `${c.name}=${c.value}`).join('; ');
+          const cookieKey  = Object.keys(headers || {}).find(k => k.toLowerCase() === 'cookie');
+          if (cookieKey) headers[cookieKey] = `${headers[cookieKey]}; ${cookieStr}`;
+          else headers = { ...headers, Cookie: cookieStr };
+        }
+
         const doFetch = hdrs => fetch(url, {
           method,
           headers: hdrs,
@@ -295,7 +406,6 @@ const server = http.createServer((req, res) => {
           const challengeHeader = upstream.headers.get('www-authenticate') || '';
           if (/digest/i.test(challengeHeader)) {
             const challenge   = parseDigestChallenge(challengeHeader);
-            const reqUrl      = new URL(url);
             const uri         = reqUrl.pathname + reqUrl.search;
             const digestValue = buildDigestHeader(digestAuth, method, uri, challenge);
             upstream = await doFetch({ ...headers, Authorization: digestValue });
@@ -303,6 +413,16 @@ const server = http.createServer((req, res) => {
         }
 
         const elapsed = Date.now() - start;
+
+        // Store any cookies the upstream server sets.
+        const setCookies = upstream.headers.getSetCookie?.() || [];
+        if (setCookies.length) {
+          for (const sc of setCookies) {
+            const cookie = parseSetCookie(sc, reqUrl.hostname);
+            if (cookie) updateJarCookie(jar, cookie);
+          }
+          saveCookies(jar);
+        }
 
         const buf         = Buffer.from(await upstream.arrayBuffer());
         const respHeaders = {};
@@ -361,4 +481,5 @@ if (require.main === module) {
 module.exports = {
   sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server,
   parseDigestChallenge, buildDigestHeader, normalizeEnvs, log,
+  loadCookies, saveCookies, cookieMatches, parseSetCookie, updateJarCookie,
 };

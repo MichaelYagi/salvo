@@ -14,7 +14,7 @@ const path = require('path');
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'salvo-test-'));
 process.env.SALVO_DATA_DIR = DATA_DIR;
 
-const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, normalizeEnvs, parseDigestChallenge, buildDigestHeader } = require('../server.js');
+const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, normalizeEnvs, parseDigestChallenge, buildDigestHeader, parseSetCookie, cookieMatches, updateJarCookie, loadCookies, saveCookies } = require('../server.js');
 
 function resetData() {
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
@@ -184,6 +184,61 @@ test('buildDigestHeader computes a response matching RFC 2617\'s worked example'
   const ha2 = md5(`GET:/dir/index.html`);
   const expected = md5(`${ha1}:${challenge.nonce}:${fields.nc}:${fields.cnonce}:${challenge.qop}:${ha2}`);
   assert.strictEqual(fields.response, expected);
+});
+
+test('parseSetCookie parses name/value and attributes', () => {
+  const cookie = parseSetCookie('session=abc123; Path=/api; Domain=example.com; Secure; Max-Age=3600', 'fallback.com');
+  assert.strictEqual(cookie.name, 'session');
+  assert.strictEqual(cookie.value, 'abc123');
+  assert.strictEqual(cookie.path, '/api');
+  assert.strictEqual(cookie.domain, 'example.com');
+  assert.strictEqual(cookie.secure, true);
+  assert.ok(cookie.expires > Date.now());
+});
+
+test('parseSetCookie defaults domain/path when not specified', () => {
+  const cookie = parseSetCookie('foo=bar', 'example.com');
+  assert.strictEqual(cookie.domain, 'example.com');
+  assert.strictEqual(cookie.path, '/');
+  assert.strictEqual(cookie.expires, null);
+  assert.strictEqual(cookie.secure, false);
+});
+
+test('cookieMatches checks domain, path, expiry, and secure', () => {
+  const cookie = { name: 'a', value: '1', domain: 'example.com', path: '/api', expires: null, secure: false };
+
+  assert.strictEqual(cookieMatches(cookie, new URL('https://example.com/api/users')), true);
+  assert.strictEqual(cookieMatches(cookie, new URL('https://sub.example.com/api')), true);
+  assert.strictEqual(cookieMatches(cookie, new URL('https://other.com/api')), false);
+  assert.strictEqual(cookieMatches(cookie, new URL('https://example.com/other')), false);
+
+  const expired = { ...cookie, expires: Date.now() - 1000 };
+  assert.strictEqual(cookieMatches(expired, new URL('https://example.com/api')), false);
+
+  const secureCookie = { ...cookie, secure: true };
+  assert.strictEqual(cookieMatches(secureCookie, new URL('http://example.com/api')), false);
+  assert.strictEqual(cookieMatches(secureCookie, new URL('https://example.com/api')), true);
+});
+
+test('updateJarCookie inserts, updates, and removes cookies', () => {
+  const jar = [];
+  updateJarCookie(jar, { name: 'a', value: '1', domain: 'example.com', path: '/', expires: null });
+  assert.strictEqual(jar.length, 1);
+
+  updateJarCookie(jar, { name: 'a', value: '2', domain: 'example.com', path: '/', expires: null });
+  assert.strictEqual(jar.length, 1);
+  assert.strictEqual(jar[0].value, '2');
+
+  updateJarCookie(jar, { name: 'a', value: '3', domain: 'example.com', path: '/', expires: Date.now() - 1000 });
+  assert.strictEqual(jar.length, 0, 'an expired cookie should remove the existing entry');
+});
+
+test('saveCookies + loadCookies round trip', () => {
+  resetData();
+  saveCookies([{ name: 'a', value: '1', domain: 'example.com', path: '/', expires: null, secure: false }]);
+  const jar = loadCookies();
+  assert.strictEqual(jar.length, 1);
+  assert.strictEqual(jar[0].name, 'a');
 });
 
 test.after(() => {

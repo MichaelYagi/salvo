@@ -24,11 +24,21 @@ async function sendRequest() {
     document.getElementById('resp-time').style.display      = 'none';
     document.getElementById('resp-size').style.display      = 'none';
     document.getElementById('copy-resp-btn').style.display  = 'none';
+    document.getElementById('resp-tests-badge').style.display = 'none';
   }
 
   const start = Date.now();
 
   try {
+    if (tab.req.preRequestScript?.trim()) {
+      try {
+        runScript(tab.req.preRequestScript, buildPmApi(tab.req, null).pm);
+        scheduleDiskSave();
+      } catch (e) {
+        throw new Error(`Pre-request script error: ${e.message}`);
+      }
+    }
+
     const { url: builtUrl, headers, bodyKind, bodyPayload, digestAuth } = await buildRequestArgs(tab.req);
 
     const proxyRes = await fetch('/api/proxy', {
@@ -51,6 +61,16 @@ async function sendRequest() {
       status:  data.status,
       elapsed,
     });
+
+    if (tab.req.testScript?.trim()) {
+      const { pm, testResults } = buildPmApi(tab.req, tab.resp);
+      try {
+        runScript(tab.req.testScript, pm);
+      } catch (e) {
+        testResults.push({ name: 'Test script error', passed: false, error: e.message });
+      }
+      tab.resp.testResults = testResults;
+    }
 
     if (state.showHist) renderHistPanel();
     scheduleDiskSave();
@@ -284,4 +304,105 @@ function parseResponse(data, elapsed) {
     elapsed,
     size:       bytes.length,
   };
+}
+
+// ─── Pre-request / test script sandbox (`pm` API) ─────────────────────────────
+
+// Run user script code with a `pm` global. Uses `new Function` — acceptable
+// given Salvo's local-first, single-user trust model (the script author is
+// the same person running the server).
+function runScript(code, pm) {
+  const fn = new Function('pm', code);
+  fn(pm);
+}
+
+// Build the `pm` object exposed to pre-request/test scripts. `resp` is the
+// parsed response (null for pre-request scripts).
+function buildPmApi(req, resp) {
+  const env = state.envs.find(e => e.id === state.activeEnv);
+  const testResults = [];
+
+  const pm = {
+    environment: {
+      get: key => env?.vars.find(v => v.key === key && v.enabled)?.value,
+      set: (key, value) => {
+        if (!env) return;
+        const existing = env.vars.find(v => v.key === key);
+        if (existing) existing.value = String(value);
+        else env.vars.push({ id: uid(), key, value: String(value), enabled: true });
+      },
+      unset: key => {
+        if (!env) return;
+        env.vars = env.vars.filter(v => v.key !== key);
+      },
+    },
+    test(name, fn) {
+      try {
+        fn();
+        testResults.push({ name, passed: true });
+      } catch (e) {
+        testResults.push({ name, passed: false, error: e.message });
+      }
+    },
+    expect: makeExpectation,
+  };
+
+  if (resp) {
+    pm.response = {
+      status:       resp.status,
+      statusText:   resp.statusText,
+      headers:      resp.headers,
+      responseTime: resp.elapsed,
+      json:  () => JSON.parse(resp.body),
+      text:  () => resp.body,
+    };
+  }
+
+  return { pm, testResults };
+}
+
+// Minimal Chai-style assertion builder for `pm.expect(value)`.
+function makeExpectation(actual) {
+  const stringify = v => { try { return JSON.stringify(v); } catch { return String(v); } };
+  const assertCheck = (pass, msg) => { if (!pass) throw new Error(msg); };
+
+  const build = negate => ({
+    get not() { return build(!negate); },
+    toBe(expected) {
+      assertCheck((actual === expected) !== negate,
+        `expected ${stringify(actual)}${negate ? ' not' : ''} to be ${stringify(expected)}`);
+    },
+    toEqual(expected) {
+      assertCheck((JSON.stringify(actual) === JSON.stringify(expected)) !== negate,
+        `expected ${stringify(actual)}${negate ? ' not' : ''} to equal ${stringify(expected)}`);
+    },
+    toBeTruthy() {
+      assertCheck((!!actual) !== negate, `expected ${stringify(actual)}${negate ? ' not' : ''} to be truthy`);
+    },
+    toBeFalsy() {
+      assertCheck((!actual) !== negate, `expected ${stringify(actual)}${negate ? ' not' : ''} to be falsy`);
+    },
+    toBeDefined() {
+      assertCheck((actual !== undefined) !== negate, `expected value${negate ? ' not' : ''} to be defined`);
+    },
+    toBeNull() {
+      assertCheck((actual === null) !== negate, `expected ${stringify(actual)}${negate ? ' not' : ''} to be null`);
+    },
+    toContain(expected) {
+      assertCheck((actual != null && actual.includes(expected)) !== negate,
+        `expected ${stringify(actual)}${negate ? ' not' : ''} to contain ${stringify(expected)}`);
+    },
+    toHaveProperty(key) {
+      assertCheck((actual != null && Object.prototype.hasOwnProperty.call(actual, key)) !== negate,
+        `expected ${stringify(actual)}${negate ? ' not' : ''} to have property "${key}"`);
+    },
+    toBeGreaterThan(n) {
+      assertCheck((actual > n) !== negate, `expected ${stringify(actual)}${negate ? ' not' : ''} to be greater than ${n}`);
+    },
+    toBeLessThan(n) {
+      assertCheck((actual < n) !== negate, `expected ${stringify(actual)}${negate ? ' not' : ''} to be less than ${n}`);
+    },
+  });
+
+  return build(false);
 }

@@ -10,6 +10,8 @@ function normalizeReq(r) {
     headers: r.headers || [],
     body:    r.body || { type: 'none', raw: '', formData: [] },
     auth:    { ...defaultAuth(), ...(r.auth || {}) },
+    preRequestScript: r.preRequestScript || '',
+    testScript:       r.testScript || '',
   };
 }
 
@@ -228,6 +230,8 @@ function replayHistory(i) {
     params:  [],
     body:    { type: 'none', raw: '', formData: [] },
     auth:    defaultAuth(),
+    preRequestScript: '',
+    testScript:       '',
   };
 
   const tab = {

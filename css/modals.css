@@ -46,6 +46,23 @@
 .env-item.active { background: var(--bg-input); color: var(--text-bright); }
 .env-dot         { margin-left: 5px; color: var(--accent); font-size: 9px; }
 
+/* ─── Cookie Jar Modal ───────────────────────────────────────────────────────── */
+.cookies-modal { min-width: 480px; max-width: 600px; }
+
+.cookie-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.cookie-main     { display: flex; align-items: center; gap: 8px; }
+.cookie-name     { font-weight: 600; color: var(--text-bright); font-family: monospace; }
+.cookie-domain   { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+.cookie-value    { font-family: monospace; color: var(--text); margin-top: 4px; word-break: break-all; }
+.cookie-expires  { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+.cookie-del      { color: var(--danger); padding: 0 4px; }
+
 /* ─── Notifications (toast) ─────────────────────────────────────────────────── */
 .notif {
   position: fixed;

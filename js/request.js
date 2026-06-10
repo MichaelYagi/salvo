@@ -64,6 +64,7 @@ function updateTabBadges() {
     let label = name.charAt(0).toUpperCase() + name.slice(1);
     if (name === 'params'  && pCount > 0) label += `<span class="tab-badge">${pCount}</span>`;
     if (name === 'headers' && hCount > 0) label += `<span class="tab-badge">${hCount}</span>`;
+    if (name === 'scripts' && (tab.req.preRequestScript || tab.req.testScript)) label += `<span class="tab-badge">●</span>`;
     t.innerHTML = label;
   });
 }
@@ -90,6 +91,7 @@ function renderReqPanel() {
     case 'auth':    el.innerHTML = authHTML(tab.req.auth);                   break;
     case 'body':    el.innerHTML = bodyHTML(tab.req.body);                   break;
     case 'curl':    el.innerHTML = curlPanelHTML();                          break;
+    case 'scripts': el.innerHTML = scriptsHTML(tab.req);                     break;
   }
 }
 
@@ -501,3 +503,37 @@ function bodyHTML(b) {
 
 function bodyTypeChange(t) { activeTab().req.body.type = t; scheduleAutoSave(); renderReqPanel(); }
 function bodySet(field, v) { activeTab().req.body[field] = v; scheduleAutoSave(); }
+
+// ─── Scripts Editor (pre-request / test) ───────────────────────────────────────
+
+function scriptsHTML(req) {
+  return `
+    <div class="scripts-editor">
+      <div class="scripts-col">
+        <h4>Pre-request Script</h4>
+        <p class="muted">Runs before the request is sent. Use <code>pm.environment.set(key, value)</code> /
+           <code>pm.environment.get(key)</code> to read or write environment variables.</p>
+        <textarea class="script-area" spellcheck="false"
+                  oninput="scriptSet('preRequestScript', this.value)"
+                  placeholder="pm.environment.set('timestamp', Date.now());">${esc(req.preRequestScript || '')}</textarea>
+      </div>
+      <div class="scripts-col">
+        <h4>Test Script</h4>
+        <p class="muted">Runs after the response is received. Use <code>pm.test(name, fn)</code> and
+           <code>pm.expect(value)</code> for assertions, <code>pm.response.json()</code> /
+           <code>pm.response.text()</code> / <code>pm.response.status</code> to inspect the response, and
+           <code>pm.environment.set(key, value)</code> to extract values for later requests.</p>
+        <textarea class="script-area" spellcheck="false"
+                  oninput="scriptSet('testScript', this.value)"
+                  placeholder="pm.test('status is 200', () => pm.expect(pm.response.status).toBe(200));
+const data = pm.response.json();
+pm.environment.set('token', data.token);">${esc(req.testScript || '')}</textarea>
+      </div>
+    </div>`;
+}
+
+function scriptSet(field, v) {
+  activeTab().req[field] = v;
+  scheduleAutoSave();
+  updateTabBadges();
+}

@@ -19,6 +19,8 @@ function renderRespPanel() {
   const tab     = activeTab();
   const resp    = tab?.resp;
 
+  updateTestsBadge(resp);
+
   // Nothing sent yet
   if (!resp) {
     wrap.innerHTML = `<span class="muted">Press Send to execute the request</span>`;
@@ -90,7 +92,7 @@ function renderRespPanel() {
     wrap.innerHTML = `${notice}<pre>${esc(resp.body)}</pre>`;
 
   // Headers tab
-  } else {
+  } else if (tab.respTab === 'headers') {
     copyBtn.style.display = 'none';
     wrap.innerHTML = Object.entries(resp.headers)
       .map(([k, v]) =>
@@ -100,7 +102,36 @@ function renderRespPanel() {
           <span>${esc(v)}</span>
         </div>`
       ).join('');
+
+  // Tests tab
+  } else if (tab.respTab === 'tests') {
+    copyBtn.style.display = 'none';
+    const results = resp.testResults || [];
+    if (!results.length) {
+      wrap.innerHTML = `<span class="muted">No tests defined. Add a test script in the Scripts tab.</span>`;
+    } else {
+      wrap.innerHTML = results.map(r => `
+        <div class="test-result ${r.passed ? 'pass' : 'fail'}">
+          <span class="test-icon">${r.passed ? '✓' : '✗'}</span>
+          <span class="test-name">${esc(r.name)}</span>
+          ${r.error ? `<div class="test-error">${esc(r.error)}</div>` : ''}
+        </div>`
+      ).join('');
+    }
   }
+}
+
+// Show a pass/fail summary badge on the "Tests" response tab.
+function updateTestsBadge(resp) {
+  const badge = document.getElementById('resp-tests-badge');
+  if (!badge) return;
+  const results = resp?.testResults;
+  if (!results || !results.length) { badge.style.display = 'none'; return; }
+  const failed = results.filter(r => !r.passed).length;
+  badge.style.display    = '';
+  badge.textContent      = failed ? `${failed}✗` : `${results.length}✓`;
+  badge.style.background = failed ? 'var(--danger-bg)' : 'transparent';
+  badge.style.color      = failed ? 'var(--danger)' : 'var(--success, #3fb950)';
 }
 
 function copyResponse() {
@@ -112,14 +143,50 @@ function copyResponse() {
 
 // ─── JSON Tree (DOM-built — no innerHTML, safe for any content) ───────────────
 
+// Save a value extracted from the response into the active environment.
+function saveJsonValueAsVar(value) {
+  const env = state.envs.find(e => e.id === state.activeEnv);
+  if (!env) { notify('No active environment', 'error'); return; }
+
+  const name = prompt('Save as environment variable named:');
+  if (!name) return;
+
+  const strValue = typeof value === 'string' ? value : JSON.stringify(value);
+  const existing = env.vars.find(v => v.key === name);
+  if (existing) existing.value = strValue;
+  else env.vars.push({ id: uid(), key: name, value: strValue, enabled: true });
+
+  scheduleDiskSave();
+  notify(`Saved {{${name}}}`, 'success');
+}
+
+function buildSaveVarBtn(value) {
+  const btn = document.createElement('button');
+  btn.className   = 'jt-savevar';
+  btn.textContent = '→{{}}';
+  btn.title       = 'Save as environment variable';
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    saveJsonValueAsVar(value);
+  });
+  return btn;
+}
+
 function buildJsonTree(data, depth) {
   const wrap = document.createElement('span');
 
   // Primitives
-  if (data === null)             { wrap.className = 'jt-null'; wrap.textContent = 'null';        return wrap; }
-  if (typeof data === 'boolean') { wrap.className = 'jt-bool'; wrap.textContent = String(data);  return wrap; }
-  if (typeof data === 'number')  { wrap.className = 'jt-num';  wrap.textContent = data;          return wrap; }
-  if (typeof data === 'string')  { wrap.className = 'jt-str';  wrap.textContent = `"${data}"`;   return wrap; }
+  if (data === null || typeof data === 'boolean' || typeof data === 'number' || typeof data === 'string') {
+    wrap.className = 'jt-leaf';
+    const valueEl = document.createElement('span');
+    if (data === null)             { valueEl.className = 'jt-null'; valueEl.textContent = 'null';       }
+    else if (typeof data === 'boolean') { valueEl.className = 'jt-bool'; valueEl.textContent = String(data); }
+    else if (typeof data === 'number')  { valueEl.className = 'jt-num';  valueEl.textContent = data;         }
+    else                            { valueEl.className = 'jt-str'; valueEl.textContent = `"${data}"`;  }
+    wrap.appendChild(valueEl);
+    wrap.appendChild(buildSaveVarBtn(data));
+    return wrap;
+  }
 
   // Arrays & objects
   const isArr   = Array.isArray(data);

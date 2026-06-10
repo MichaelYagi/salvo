@@ -163,6 +163,8 @@ function newRequestTemplate() {
     params:  [],
     body:    { type: 'none', raw: '', formData: [] },
     auth:    defaultAuth(),
+    preRequestScript: '',
+    testScript:       '',
   };
 }
 

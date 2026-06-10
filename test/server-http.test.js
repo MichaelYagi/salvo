@@ -250,6 +250,68 @@ test('POST /api/proxy returns ok:false when the upstream is unreachable', async 
   assert.ok(data.error);
 });
 
+test('POST /api/proxy stores Set-Cookie responses and resends them on later requests', async () => {
+  const receivedCookies = [];
+  const upstream = http.createServer((req, res) => {
+    receivedCookies.push(req.headers['cookie'] || null);
+    if (!req.headers['cookie']) {
+      res.writeHead(200, { 'Set-Cookie': ['session=abc123; Path=/', 'theme=dark; Path=/'] });
+    } else {
+      res.writeHead(200);
+    }
+    res.end('ok');
+  });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = `http://127.0.0.1:${upstream.address().port}/`;
+
+  try {
+    // First request: upstream sets two cookies.
+    const res1 = await fetch(`${base}/api/proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: upstreamUrl, method: 'GET', headers: {} }),
+    });
+    assert.strictEqual((await res1.json()).ok, true);
+    assert.strictEqual(receivedCookies[0], null);
+
+    // The jar should now contain both cookies.
+    const jarRes = await fetch(`${base}/api/cookies`);
+    const { cookies } = await jarRes.json();
+    const names = cookies.map(c => c.name).sort();
+    assert.deepStrictEqual(names, ['session', 'theme']);
+
+    // Second request: cookies should be sent back to the upstream.
+    const res2 = await fetch(`${base}/api/proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: upstreamUrl, method: 'GET', headers: {} }),
+    });
+    assert.strictEqual((await res2.json()).ok, true);
+    assert.match(receivedCookies[1], /session=abc123/);
+    assert.match(receivedCookies[1], /theme=dark/);
+
+    // DELETE /api/cookies removes a single cookie.
+    const delRes = await fetch(`${base}/api/cookies`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: cookies[0].domain, path: cookies[0].path, name: cookies[0].name }),
+    });
+    const delData = await delRes.json();
+    assert.strictEqual(delData.ok, true);
+    assert.strictEqual(delData.cookies.length, 1);
+
+    // DELETE with no body clears the whole jar.
+    const clearRes = await fetch(`${base}/api/cookies`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.deepStrictEqual((await clearRes.json()).cookies, []);
+  } finally {
+    upstream.close();
+  }
+});
+
 test('GET / serves index.html', async () => {
   const res = await fetch(`${base}/`);
   assert.strictEqual(res.status, 200);

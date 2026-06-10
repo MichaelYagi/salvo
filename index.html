@@ -38,6 +38,7 @@
     <span class="tb-div">|</span>
     <select id="env-select" style="width:150px;padding:3px 7px;font-size:12px" onchange="envQuickSwitch(this.value)"></select>
     <button onclick="openEnvModal()">Manage Env</button>
+    <button onclick="openCookiesModal()" title="View and manage stored cookies">Cookies</button>
     <div class="sep"></div>
     <span id="save-status" style="font-size:11px;color:var(--text-muted)">All changes saved</span>
     <div id="theme-picker">
@@ -117,6 +118,7 @@
           <button class="tab active" data-tab="headers" onclick="switchReqTab('headers')">Headers</button>
           <button class="tab"        data-tab="auth"    onclick="switchReqTab('auth')">Auth</button>
           <button class="tab"        data-tab="body"    onclick="switchReqTab('body')">Body</button>
+          <button class="tab"        data-tab="scripts" onclick="switchReqTab('scripts')">Scripts</button>
           <button class="tab"        data-tab="curl"    onclick="switchReqTab('curl')">cURL</button>
           <div class="sep"></div>
           <input id="req-name-input"
@@ -138,6 +140,7 @@
             <div class="sep"></div>
             <button class="tab active" data-rtab="body"    onclick="switchRespTab('body')"    style="padding:3px 10px">Body</button>
             <button class="tab"        data-rtab="headers" onclick="switchRespTab('headers')" style="padding:3px 10px">Headers</button>
+            <button class="tab"        data-rtab="tests"   onclick="switchRespTab('tests')"   style="padding:3px 10px">Tests<span id="resp-tests-badge" class="tab-badge" style="display:none"></span></button>
             <button id="copy-resp-btn" onclick="copyResponse()" style="font-size:11px;display:none">Copy</button>
           </div>
           <div id="resp-body-wrap">
@@ -170,6 +173,20 @@
     <div class="env-layout">
       <div class="env-list" id="env-list-panel"></div>
       <div id="env-detail-panel"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cookies Modal ──────────────────────────────────────────────────────── -->
+<div id="cookies-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)closeCookiesModal()">
+  <div class="modal cookies-modal" onclick="event.stopPropagation()">
+    <h3>Cookie Jar</h3>
+    <p>Cookies set by responses (<code>Set-Cookie</code>) are stored here and sent automatically on subsequent requests to matching domains.</p>
+    <div id="cookies-list"></div>
+    <div class="modal-footer">
+      <button onclick="clearAllCookies()" style="color:var(--danger)">Clear All</button>
+      <button class="btn-primary" onclick="closeCookiesModal()">Close</button>
     </div>
   </div>
 </div>
