@@ -1,0 +1,102 @@
+/* ─── Color Themes ───────────────────────────────────────────────────────────
+   Every other stylesheet (and a handful of inline styles in js/) reference
+   these custom properties instead of hardcoded hex colors. `:root` is the
+   "Dark" theme (the original palette); other themes are selected by setting
+   `data-theme="..."` on <html> (see js/theme.js). To add a theme: add a new
+   [data-theme="..."] block here defining every variable below, plus an entry
+   in the THEMES array in js/theme.js. */
+
+:root,
+[data-theme="dark"] {
+  --bg:               #0d1117;
+  --bg-elevated:      #161b22;
+  --bg-elevated-2:    #1c2128;
+  --bg-input:         #21262d;
+  --border:           #30363d;
+  --border-light:     #484f58;
+  --text:             #c9d1d9;
+  --text-bright:      #e6edf3;
+  --text-muted:       #8b949e;
+  --text-faint:       #484f58;
+  --placeholder:      #6e7681;
+  --accent:           #58a6ff;
+  --accent-alpha:     #58a6ff22;
+  --accent-contrast:  #0d1117;
+  --selected:         #388bfd;
+  --selected-alpha:   #388bfd44;
+  --selected-bg:      #0d1a2d;
+  --success:          #3fb950;
+  --success-bg:       #0d2d1a;
+  --danger:           #f85149;
+  --danger-bg:        #2d0f0f;
+  --danger-border:    #5a1a1a;
+  --warning:          #fca130;
+  --info-bg:          #0d1b2e;
+  --json-key:         #79c0ff;
+  --json-str:         #a5d6ff;
+  --json-num:         #f8c555;
+  --json-bool:        #ff7b72;
+}
+
+[data-theme="light"] {
+  --bg:               #ffffff;
+  --bg-elevated:      #f6f8fa;
+  --bg-elevated-2:    #eaeef2;
+  --bg-input:         #eaeef2;
+  --border:           #d0d7de;
+  --border-light:     #afb8c1;
+  --text:             #1f2328;
+  --text-bright:      #0a0c10;
+  --text-muted:       #59636e;
+  --text-faint:       #8c959f;
+  --placeholder:      #8c959f;
+  --accent:           #0969da;
+  --accent-alpha:     #0969da22;
+  --accent-contrast:  #ffffff;
+  --selected:         #0969da;
+  --selected-alpha:   #0969da33;
+  --selected-bg:      #ddf4ff;
+  --success:          #1a7f37;
+  --success-bg:       #d1f0d8;
+  --danger:           #cf222e;
+  --danger-bg:        #ffebe9;
+  --danger-border:    #ffc1bc;
+  --warning:          #bc4c00;
+  --info-bg:          #ddf4ff;
+  --json-key:         #0550ae;
+  --json-str:         #0a3069;
+  --json-num:         #953800;
+  --json-bool:        #b31d28;
+}
+
+/* "Nord" — a cool blue-grey dark theme with cyan/teal accents */
+[data-theme="nord"] {
+  --bg:               #2e3440;
+  --bg-elevated:      #3b4252;
+  --bg-elevated-2:    #434c5e;
+  --bg-input:         #434c5e;
+  --border:           #4c566a;
+  --border-light:     #5e6779;
+  --text:             #d8dee9;
+  --text-bright:      #eceff4;
+  --text-muted:       #9aa5b1;
+  --text-faint:       #6c7689;
+  --placeholder:      #6c7689;
+  --accent:           #88c0d0;
+  --accent-alpha:     #88c0d022;
+  --accent-contrast:  #2e3440;
+  --selected:         #81a1c1;
+  --selected-alpha:   #81a1c144;
+  --selected-bg:      #313b4a;
+  --success:          #a3be8c;
+  --success-bg:       #2b3328;
+  --danger:           #bf616a;
+  --danger-bg:        #3a2326;
+  --danger-border:    #5a2f33;
+  --warning:          #d08770;
+  --info-bg:          #2a3540;
+  --json-key:         #88c0d0;
+  --json-str:         #a3be8c;
+  --json-num:         #ebcb8b;
+  --json-bool:        #bf616a;
+}

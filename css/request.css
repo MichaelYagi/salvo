@@ -5,16 +5,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #484f58;
+  color: var(--text-faint);
 }
 #empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-#empty-state h3    { font-size: 15px; font-weight: 500; color: #6e7681; margin-bottom: 6px; }
+#empty-state h3    { font-size: 15px; font-weight: 500; color: var(--placeholder); margin-bottom: 6px; }
 
 /* ─── Tab Strip (open requests) ─────────────────────────────────────────────── */
 #tab-strip {
   display: flex;
   overflow-x: auto;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--bg-input);
   flex-shrink: 0;
 }
 .req-tab {
@@ -22,25 +22,25 @@
   align-items: center;
   gap: 6px;
   padding: 7px 8px 7px 12px;
-  border-right: 1px solid #21262d;
+  border-right: 1px solid var(--bg-input);
   font-size: 12px;
-  color: #8b949e;
+  color: var(--text-muted);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.req-tab.active     { color: #c9d1d9; background: #161b22; }
+.req-tab.active     { color: var(--text); background: var(--bg-elevated); }
 .req-tab-method     { font-weight: 700; font-size: 10px; }
 .req-tab-name       { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-.req-tab-close      { color: #8b949e; padding: 0 2px; font-size: 13px; line-height: 1; background: none; border: none; cursor: pointer; }
-.req-tab-close:hover { color: #f85149; }
+.req-tab-close      { color: var(--text-muted); padding: 0 2px; font-size: 13px; line-height: 1; background: none; border: none; cursor: pointer; }
+.req-tab-close:hover { color: var(--danger); }
 
 /* ─── URL Bar ───────────────────────────────────────────────────────────────── */
 #url-bar {
   display: flex;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--bg-input);
   flex-shrink: 0;
 }
 #url-bar select { width: 96px; font-weight: 700; padding: 5px 4px; flex-shrink: 0; }
@@ -56,7 +56,7 @@
   background: transparent;
   border: 1px solid transparent;
 }
-#req-name-input:focus { border-color: #30363d; }
+#req-name-input:focus { border-color: var(--border); }
 
 /* ─── KV Editor (params / headers / form fields) ───────────────────────────── */
 .kv-grid {
@@ -78,19 +78,19 @@
 }
 .kv-grid-notes input { width: 100%; font-family: monospace; font-size: 11px; }
 
-.kv-note             { font-family: inherit !important; color: #8b949e !important; font-style: italic; }
-.kv-note::placeholder { color: #484f58; font-style: italic; }
+.kv-note             { font-family: inherit !important; color: var(--text-muted) !important; font-style: italic; }
+.kv-note::placeholder { color: var(--text-faint); font-style: italic; }
 
-.kv-del          { color: #f85149 !important; font-size: 15px; padding: 2px 4px; }
-.kv-del:hover    { background: #2d0f0f !important; }
-.kv-add          { color: #58a6ff; margin-top: 4px; }
+.kv-del          { color: var(--danger) !important; font-size: 15px; padding: 2px 4px; }
+.kv-del:hover    { background: var(--danger-bg) !important; }
+.kv-add          { color: var(--accent); margin-top: 4px; }
 .kv-add:hover    { background: none !important; opacity: .8; }
 
 /* ─── Header Value Autocomplete ────────────────────────────────────────────── */
 .header-suggest {
   position: absolute;
-  background: #1c2128;
-  border: 1px solid #30363d;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
   border-radius: 6px;
   z-index: 500;
   max-height: 220px;
@@ -98,14 +98,14 @@
   box-shadow: 0 8px 24px rgba(0,0,0,.6);
 }
 
-.hs-item        { padding: 5px 10px; cursor: pointer; color: #c9d1d9; font-size: 12px; font-family: monospace; }
+.hs-item        { padding: 5px 10px; cursor: pointer; color: var(--text); font-size: 12px; font-family: monospace; }
 .hs-item:hover,
-.hs-item.active { background: #21262d; color: #58a6ff; }
+.hs-item.active { background: var(--bg-input); color: var(--accent); }
 
 /* ─── Body Editor ───────────────────────────────────────────────────────────── */
 .body-types             { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
-.body-types label       { display: flex; align-items: center; gap: 5px; cursor: pointer; color: #8b949e; }
-.body-types label.active-type { color: #58a6ff; }
+.body-types label       { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-muted); }
+.body-types label.active-type { color: var(--accent); }
 
 #body-raw-area {
   width: 100%;

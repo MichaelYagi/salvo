@@ -10,8 +10,8 @@
 }
 
 .modal {
-  background: #161b22;
-  border: 1px solid #30363d;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 24px;
   min-width: 460px;
@@ -21,8 +21,8 @@
   overflow-y: auto;
 }
 
-.modal h3     { color: #e6edf3; font-weight: 600; margin-bottom: 16px; }
-.modal label  { display: block; color: #8b949e; font-size: 11px; margin-bottom: 4px; }
+.modal h3     { color: var(--text-bright); font-weight: 600; margin-bottom: 16px; }
+.modal label  { display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 4px; }
 .modal input,
 .modal select { width: 100%; margin-bottom: 12px; }
 
@@ -31,7 +31,7 @@
    align-items: center, leaving the delete button visually off-centre. */
 .modal .kv-grid input,
 .modal .kv-grid-notes input { margin-bottom: 0; }
-.modal p      { color: #8b949e; font-size: 12px; line-height: 1.6; margin-bottom: 16px; }
+.modal p      { color: var(--text-muted); font-size: 12px; line-height: 1.6; margin-bottom: 16px; }
 
 .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 
@@ -39,12 +39,12 @@
 .env-modal  { min-width: 580px; max-width: 680px; }
 .env-layout { display: grid; grid-template-columns: 170px 1fr; gap: 16px; min-height: 300px; }
 
-.env-list   { border-right: 1px solid #21262d; padding-right: 12px; }
+.env-list   { border-right: 1px solid var(--bg-input); padding-right: 12px; }
 
-.env-item        { padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 2px; font-size: 12px; color: #8b949e; }
-.env-item:hover  { background: #21262d; }
-.env-item.active { background: #21262d; color: #e6edf3; }
-.env-dot         { margin-left: 5px; color: #58a6ff; font-size: 9px; }
+.env-item        { padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 2px; font-size: 12px; color: var(--text-muted); }
+.env-item:hover  { background: var(--bg-input); }
+.env-item.active { background: var(--bg-input); color: var(--text-bright); }
+.env-dot         { margin-left: 5px; color: var(--accent); font-size: 9px; }
 
 /* ─── Notifications (toast) ─────────────────────────────────────────────────── */
 .notif {
@@ -65,9 +65,9 @@
   to   { opacity: 1; transform: none; }
 }
 
-.notif.success { background: #0d2d1a; border: 1px solid #3fb950; color: #3fb950; }
-.notif.error   { background: #2d0f0f; border: 1px solid #f85149; color: #f85149; }
-.notif.info    { background: #0d1b2e; border: 1px solid #58a6ff; color: #58a6ff; }
+.notif.success { background: var(--success-bg); border: 1px solid var(--success); color: var(--success); }
+.notif.error   { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+.notif.info    { background: var(--info-bg); border: 1px solid var(--accent); color: var(--accent); }
 
 /* ─── Responsive (tablet & phone) ───────────────────────────────────────────── */
 @media (max-width: 680px) {
@@ -75,7 +75,7 @@
   .modal        { min-width: 0; max-width: 100%; padding: 16px; }
   .env-modal    { min-width: 0; max-width: 100%; }
   .env-layout   { grid-template-columns: 1fr; min-height: 0; }
-  .env-list     { border-right: none; border-bottom: 1px solid #21262d; padding-right: 0; padding-bottom: 12px; margin-bottom: 12px; }
+  .env-list     { border-right: none; border-bottom: 1px solid var(--bg-input); padding-right: 0; padding-bottom: 12px; margin-bottom: 12px; }
 
   .notif { left: 12px; right: 12px; bottom: 12px; max-width: none; }
 }

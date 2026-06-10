@@ -32,9 +32,9 @@ function renderRespPanel() {
     sizeEl.style.display  = 'none';
     copyBtn.style.display = 'none';
     wrap.innerHTML = `
-      <div style="color:#f85149;background:#2d0f0f;border:1px solid #5a1a1a;border-radius:4px;padding:10px 14px">
+      <div style="color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:4px;padding:10px 14px">
         ${esc(resp.error)}
-        ${resp.elapsed ? `<span style="margin-left:8px;color:#8b949e">(${resp.elapsed}ms)</span>` : ''}
+        ${resp.elapsed ? `<span style="margin-left:8px;color:var(--text-muted)">(${resp.elapsed}ms)</span>` : ''}
       </div>`;
     return;
   }
@@ -95,8 +95,8 @@ function renderRespPanel() {
     wrap.innerHTML = Object.entries(resp.headers)
       .map(([k, v]) =>
         `<div style="margin-bottom:3px">
-          <span style="color:#79c0ff">${esc(k)}</span>
-          <span style="color:#8b949e">: </span>
+          <span style="color:var(--json-key)">${esc(k)}</span>
+          <span style="color:var(--text-muted)">: </span>
           <span>${esc(v)}</span>
         </div>`
       ).join('');
@@ -127,7 +127,7 @@ function buildJsonTree(data, depth) {
 
   if (!keys.length) {
     wrap.textContent  = isArr ? '[]' : '{}';
-    wrap.style.color  = '#8b949e';
+    wrap.style.color  = 'var(--text-muted)';
     return wrap;
   }
 
@@ -137,14 +137,14 @@ function buildJsonTree(data, depth) {
   toggle.className = 'jt-toggle';
 
   const openBracket = document.createElement('span');
-  openBracket.style.color = '#8b949e';
+  openBracket.style.color = 'var(--text-muted)';
   openBracket.textContent = isArr ? '[' : '{';
 
   const children = document.createElement('div');
   children.className = 'jt-children';
 
   const closeBracket = document.createElement('span');
-  closeBracket.style.color = '#8b949e';
+  closeBracket.style.color = 'var(--text-muted)';
   closeBracket.textContent = isArr ? ']' : '}';
 
   function preview() {
@@ -171,7 +171,7 @@ function buildJsonTree(data, depth) {
       row.appendChild(keyEl);
 
       const colon       = document.createElement('span');
-      colon.style.color = '#8b949e';
+      colon.style.color = 'var(--text-muted)';
       colon.textContent = ': ';
       row.appendChild(colon);
     }
@@ -180,7 +180,7 @@ function buildJsonTree(data, depth) {
 
     if (i < keys.length - 1) {
       const comma       = document.createElement('span');
-      comma.style.color = '#8b949e';
+      comma.style.color = 'var(--text-muted)';
       comma.textContent = ',';
       row.appendChild(comma);
     }

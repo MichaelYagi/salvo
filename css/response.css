@@ -5,7 +5,7 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
-  border-top: 1px solid #21262d;
+  border-top: 1px solid var(--bg-input);
 }
 
 #resp-header {
@@ -13,12 +13,12 @@
   align-items: center;
   gap: 8px;
   padding: 5px 12px;
-  border-bottom: 1px solid #21262d;
-  background: #0d1117;
+  border-bottom: 1px solid var(--bg-input);
+  background: var(--bg);
   flex-shrink: 0;
 }
 
-.resp-label { font-size: 10px; font-weight: 700; color: #8b949e; letter-spacing: 1px; }
+.resp-label { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 1px; }
 
 .status-badge {
   display: inline-block;
@@ -35,22 +35,22 @@
   font-family: monospace;
   font-size: 12px;
   line-height: 1.65;
-  background: #0d1117;
+  background: var(--bg);
 }
 #resp-body-wrap pre {
   white-space: pre-wrap;
   word-break: break-word;
-  color: #c9d1d9;
+  color: var(--text);
   margin: 0;
 }
 
 /* ─── JSON Tree ─────────────────────────────────────────────────────────────── */
-.jt-toggle   { cursor: pointer; color: #8b949e; user-select: none; font-size: 11px; margin-right: 2px; }
-.jt-key      { color: #79c0ff; }
-.jt-str      { color: #a5d6ff; }
-.jt-num      { color: #f8c555; }
-.jt-bool     { color: #ff7b72; }
-.jt-null     { color: #8b949e; }
+.jt-toggle   { cursor: pointer; color: var(--text-muted); user-select: none; font-size: 11px; margin-right: 2px; }
+.jt-key      { color: var(--json-key); }
+.jt-str      { color: var(--json-str); }
+.jt-num      { color: var(--json-num); }
+.jt-bool     { color: var(--json-bool); }
+.jt-null     { color: var(--text-muted); }
 .jt-children { margin-left: 16px; }
 .jt-row      { line-height: 1.8; }
 
@@ -62,14 +62,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--bg-input);
 }
 
-.hist-label { font-size: 10px; font-weight: 700; color: #8b949e; letter-spacing: 1px; }
+.hist-label { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 1px; }
 
 #hist-list { flex: 1; overflow-y: auto; }
 
-.hist-item         { padding: 7px 12px; border-bottom: 1px solid #21262d; cursor: pointer; font-size: 11px; }
-.hist-item:hover   { background: #161b22; }
+.hist-item         { padding: 7px 12px; border-bottom: 1px solid var(--bg-input); cursor: pointer; font-size: 11px; }
+.hist-item:hover   { background: var(--bg-elevated); }
 .hist-top          { display: flex; gap: 6px; margin-bottom: 2px; align-items: center; }
-.hist-url          { color: #8b949e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-url          { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

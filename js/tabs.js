@@ -78,7 +78,7 @@ function renderTabStrip() {
   el.style.display = 'flex';
   el.innerHTML = state.tabs.map(t => {
     const active = t.id === state.activeTabId;
-    const color  = MC[t.req.method] || '#c9d1d9';
+    const color  = MC[t.req.method] || 'var(--text)';
     return `
       <div class="req-tab ${active ? 'active' : ''}" onclick="switchTab('${t.id}')">
         <span class="req-tab-method" style="color:${color}">${esc(t.req.method)}</span>

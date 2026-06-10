@@ -17,7 +17,7 @@ async function sendRequest() {
     document.getElementById('send-btn').textContent = 'Cancel';
     document.getElementById('send-btn').onclick     = cancelReq;
     document.getElementById('resp-body-wrap').innerHTML =
-      `<div style="display:flex;align-items:center;gap:8px;color:#8b949e">
+      `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted)">
          <div class="spinner"><span></span><span></span><span></span></div> Sending…
        </div>`;
     document.getElementById('status-badge').style.display   = 'none';

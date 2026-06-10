@@ -124,10 +124,10 @@ function renderSearchResults(list, query) {
     );
 
   list.insertAdjacentHTML('beforeend',
-    `<div style="padding:4px 12px;font-size:10px;color:#8b949e;letter-spacing:1px">RESULTS (${matches.length})</div>`);
+    `<div style="padding:4px 12px;font-size:10px;color:var(--text-muted);letter-spacing:1px">RESULTS (${matches.length})</div>`);
 
   if (!matches.length) {
-    list.insertAdjacentHTML('beforeend', '<div style="color:#484f58;padding:8px 12px;font-size:12px">No results</div>');
+    list.insertAdjacentHTML('beforeend', '<div style="color:var(--text-faint);padding:8px 12px;font-size:12px">No results</div>');
     return;
   }
 
@@ -179,7 +179,7 @@ function folderHTML(colId, folder) {
 function reqRowHTML(r, indent) {
   const active   = activeTab()?.reqId === r.id;
   const selected = state.selectedReqIds.has(r.id);
-  const color    = MC[r.method] || '#c9d1d9';
+  const color    = MC[r.method] || 'var(--text)';
 
   return `
     <div class="req-row ${active ? 'active' : ''} ${selected ? 'selected' : ''}" style="padding-left:${indent + 8}px;position:relative"

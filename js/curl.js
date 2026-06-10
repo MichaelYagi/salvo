@@ -85,9 +85,9 @@ function curlPanelHTML() {
     <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
       <button class="btn-primary" onclick="copyCurl()" style="font-size:11px;padding:4px 12px">Copy</button>
     </div>
-    <pre id="curl-output" style="margin:0;background:#0d1117;border:1px solid #21262d;border-radius:4px;
+    <pre id="curl-output" style="margin:0;background:var(--bg);border:1px solid var(--bg-input);border-radius:4px;
          padding:12px 14px;font-family:monospace;font-size:12px;line-height:1.7;
-         color:#c9d1d9;white-space:pre-wrap;word-break:break-all">${esc(cmd)}</pre>`;
+         color:var(--text);white-space:pre-wrap;word-break:break-all">${esc(cmd)}</pre>`;
 }
 
 // ─── Copy to clipboard ────────────────────────────────────────────────────────

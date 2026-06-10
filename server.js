@@ -8,6 +8,7 @@ const http   = require('http');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+const os     = require('os');
 
 // ─── CLI args ───────────────────────────────────────────────────────────────────
 // `node server.js --port=<port>` or `node server.js --port <port>`
@@ -339,8 +340,22 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// ─── LAN-accessible addresses, for the startup log ─────────────────────────────
+function lanAddresses() {
+  const addrs = [];
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const iface of ifaces || []) {
+      if (iface.family === 'IPv4' && !iface.internal) addrs.push(iface.address);
+    }
+  }
+  return addrs;
+}
+
 if (require.main === module) {
-  server.listen(PORT, () => log('INFO', `Salvo running at http://localhost:${PORT}`));
+  server.listen(PORT, () => {
+    log('INFO', `Salvo running at http://localhost:${PORT}`);
+    for (const addr of lanAddresses()) log('INFO', `  also available at http://${addr}:${PORT}`);
+  });
 }
 
 module.exports = {

@@ -32,7 +32,7 @@ function renderEnvList() {
         ${e.id === state.activeEnv ? '<span class="env-dot">●</span>' : ''}
       </div>`
     ).join('') +
-    `<button onclick="addEnv()" style="color:#58a6ff;font-size:11px;margin-top:8px;width:100%;padding:5px 0">
+    `<button onclick="addEnv()" style="color:var(--accent);font-size:11px;margin-top:8px;width:100%;padding:5px 0">
        + New Environment
      </button>`;
 }
@@ -50,7 +50,7 @@ function renderEnvDetail() {
   html += `
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn-primary" onclick="envUse()">Use This Environment</button>
-      ${env.id !== 'default' ? `<button onclick="envDelete()" style="color:#f85149">Delete</button>` : ''}
+      ${env.id !== 'default' ? `<button onclick="envDelete()" style="color:var(--danger)">Delete</button>` : ''}
     </div>`;
 
   detailEl.innerHTML = html;

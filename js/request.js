@@ -23,7 +23,7 @@ function syncReqEditor() {
   const r  = tab.req;
   const ms = document.getElementById('method-select');
   ms.value       = r.method;
-  ms.style.color = MC[r.method] || '#c9d1d9';
+  ms.style.color = MC[r.method] || 'var(--text)';
   document.getElementById('url-input').value      = r.url;
   document.getElementById('req-name-input').value = r.name;
   updateTabBadges();
@@ -36,7 +36,7 @@ function syncReqEditor() {
 function onMethodChange() {
   const tab = activeTab();
   const v = document.getElementById('method-select').value;
-  document.getElementById('method-select').style.color = MC[v] || '#c9d1d9';
+  document.getElementById('method-select').style.color = MC[v] || 'var(--text)';
   tab.req.method = v;
   scheduleAutoSave();
   renderTabStrip();
@@ -328,7 +328,7 @@ function kvAdd(key) {
 
 // ─── Auth Editor ──────────────────────────────────────────────────────────────
 
-const AUTH_LABEL_STYLE = 'display:block;color:#8b949e;font-size:11px;margin-bottom:4px';
+const AUTH_LABEL_STYLE = 'display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px';
 
 function authHTML(a) {
   let html = `
@@ -347,7 +347,7 @@ function authHTML(a) {
 
   if (a.type === 'bearer') {
     html += `
-      <label style="display:block;color:#8b949e;font-size:11px;margin-bottom:4px">Token</label>
+      <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Token</label>
       <input value="${esc(a.token)}" oninput="authSet('token',this.value)"
              placeholder="Bearer token…" style="width:100%;font-family:monospace">`;
   }
@@ -356,11 +356,11 @@ function authHTML(a) {
     html += `
       <div class="two-col">
         <div>
-          <label style="display:block;color:#8b949e;font-size:11px;margin-bottom:4px">Username</label>
+          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Username</label>
           <input value="${esc(a.username)}" oninput="authSet('username',this.value)" style="width:100%">
         </div>
         <div>
-          <label style="display:block;color:#8b949e;font-size:11px;margin-bottom:4px">Password</label>
+          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Password</label>
           <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value)" style="width:100%">
         </div>
       </div>`;
@@ -370,12 +370,12 @@ function authHTML(a) {
     html += `
       <div class="two-col">
         <div>
-          <label style="display:block;color:#8b949e;font-size:11px;margin-bottom:4px">Header Name</label>
+          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Header Name</label>
           <input value="${esc(a.apiKey)}" oninput="authSet('apiKey',this.value)"
                  placeholder="X-API-Key" style="width:100%;font-family:monospace">
         </div>
         <div>
-          <label style="display:block;color:#8b949e;font-size:11px;margin-bottom:4px">Value</label>
+          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Value</label>
           <input value="${esc(a.apiValue)}" oninput="authSet('apiValue',this.value)"
                  style="width:100%;font-family:monospace">
         </div>
@@ -417,7 +417,7 @@ function authHTML(a) {
       <input value="${esc(a.scope)}" oninput="authSet('scope',this.value)" style="width:100%;font-family:monospace;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
         <button class="btn-primary" onclick="manualFetchOAuthToken()">Get Access Token</button>
-        <span style="font-size:11px;color:#8b949e">${
+        <span style="font-size:11px;color:var(--text-muted)">${
           a.cachedToken
             ? `Token cached, expires ${new Date(a.cachedExpiry).toLocaleTimeString()}`
             : 'No token yet — fetched automatically on Send'

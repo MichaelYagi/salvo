@@ -8,17 +8,17 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  background: #0f1117;
-  color: #c9d1d9;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 13px;
 }
 
 /* ─── Scrollbars ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar          { width: 6px; height: 6px; }
-::-webkit-scrollbar-track    { background: #0d1117; }
-::-webkit-scrollbar-thumb    { background: #30363d; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #484f58; }
+::-webkit-scrollbar-track    { background: var(--bg); }
+::-webkit-scrollbar-thumb    { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
 
 /* ─── App Shell Layout ─────────────────────────────────────────────────────── */
 #app       { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -39,13 +39,13 @@ html, body {
   gap: 10px;
   padding: 0 14px;
   height: 44px;
-  background: #161b22;
-  border-bottom: 1px solid #21262d;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.logo    { font-weight: 800; font-size: 16px; color: #58a6ff; letter-spacing: -.5px; user-select: none; }
-.tb-div  { color: #30363d; font-size: 20px; line-height: 1; }
+.logo    { font-weight: 800; font-size: 16px; color: var(--accent); letter-spacing: -.5px; user-select: none; }
+.tb-div  { color: var(--border); font-size: 20px; line-height: 1; }
 .sep     { flex: 1; }
 
 /* ─── Sidebar Toggle (mobile only) ──────────────────────────────────────────── */
@@ -67,9 +67,9 @@ html, body {
 
 /* ─── Form Controls ────────────────────────────────────────────────────────── */
 input, select, textarea {
-  background: #161b22;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
   border-radius: 4px;
   padding: 5px 8px;
   font-size: 12px;
@@ -77,42 +77,42 @@ input, select, textarea {
   outline: none;
 }
 
-input:focus, select:focus, textarea:focus { border-color: #58a6ff; }
-select option  { background: #161b22; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option  { background: var(--bg-elevated); }
 textarea       { resize: vertical; }
 
-input[type="checkbox"] { accent-color: #58a6ff; cursor: pointer; width: 14px; height: 14px; }
-input[type="radio"]    { accent-color: #58a6ff; cursor: pointer; }
+input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; }
+input[type="radio"]    { accent-color: var(--accent); cursor: pointer; }
 
 /* ─── Buttons ──────────────────────────────────────────────────────────────── */
 button {
   cursor: pointer;
   border: none;
   background: transparent;
-  color: #8b949e;
+  color: var(--text-muted);
   font-family: inherit;
   font-size: 12px;
   padding: 4px 8px;
   border-radius: 4px;
   outline: none;
 }
-button:hover { background: #21262d; color: #c9d1d9; }
+button:hover { background: var(--bg-input); color: var(--text); }
 
-.btn-primary         { background: #58a6ff !important; color: #0f1117 !important; font-weight: 700; padding: 5px 14px; }
-.btn-primary:hover   { opacity: .85; background: #58a6ff !important; }
-.btn-danger          { color: #f85149 !important; }
-.btn-danger:hover    { background: #2d0f0f !important; }
+.btn-primary         { background: var(--accent) !important; color: var(--accent-contrast) !important; font-weight: 700; padding: 5px 14px; }
+.btn-primary:hover   { opacity: .85; background: var(--accent) !important; }
+.btn-danger          { color: var(--danger) !important; }
+.btn-danger:hover    { background: var(--danger-bg) !important; }
 
 /* ─── Shared Utilities ─────────────────────────────────────────────────────── */
-.muted         { color: #484f58; }
-.section-label { font-size: 10px; font-weight: 700; color: #8b949e; letter-spacing: 1px; margin-bottom: 8px; }
+.muted         { color: var(--text-faint); }
+.section-label { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 8px; }
 .two-col       { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* ─── Tabs (shared by request and response bars) ───────────────────────────── */
 .tabbar {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
   flex-shrink: 0;
 }
@@ -121,7 +121,7 @@ button:hover { background: #21262d; color: #c9d1d9; }
   padding: 8px 14px;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #8b949e;
+  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -129,16 +129,16 @@ button:hover { background: #21262d; color: #c9d1d9; }
   background: none;
   border-radius: 0;
 }
-.tab:hover        { background: none; color: #c9d1d9; }
-.tab.active       { color: #58a6ff; border-bottom-color: #58a6ff; }
-.tab-badge        { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 10px; font-size: 10px; font-weight: 600; background: #58a6ff22; color: #58a6ff; }
+.tab:hover        { background: none; color: var(--text); }
+.tab.active       { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-badge        { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 10px; font-size: 10px; font-weight: 600; background: var(--accent-alpha); color: var(--accent); }
 
 /* ─── Generic scrollable panel ─────────────────────────────────────────────── */
 .panel { flex: 1; overflow-y: auto; padding: 12px; }
 
 /* ─── Spinner ──────────────────────────────────────────────────────────────── */
 .spinner       { display: inline-flex; gap: 3px; align-items: center; }
-.spinner span  { width: 5px; height: 5px; border-radius: 50%; background: #58a6ff; animation: rf-pulse 1.2s ease-in-out infinite; }
+.spinner span  { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: rf-pulse 1.2s ease-in-out infinite; }
 .spinner span:nth-child(2) { animation-delay: .2s; }
 .spinner span:nth-child(3) { animation-delay: .4s; }
 
@@ -167,3 +167,56 @@ button:hover { background: #21262d; color: #c9d1d9; }
   #topbar .logo { display: none; }
   #save-status  { display: none; }
 }
+
+/* ─── Theme Picker ───────────────────────────────────────────────────────────
+   Swatch button (no border/background) + dropdown menu. The swatch itself is
+   built by js/theme.js (themeSwatchHTML) so it works both for the topbar
+   button and for each option in the dropdown. */
+#theme-picker { position: relative; }
+
+#theme-picker-btn {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+  background: none;
+}
+#theme-picker-btn:hover { background: var(--bg-input); }
+
+.theme-swatch {
+  display: inline-flex;
+  width: 22px;
+  height: 16px;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.theme-swatch span { flex: 1; height: 100%; }
+
+#theme-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 500;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 130px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.theme-option:hover    { background: var(--bg-input); color: var(--text); }
+.theme-option.active   { color: var(--accent); }

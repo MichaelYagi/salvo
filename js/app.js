@@ -94,14 +94,14 @@ function setSaveStatus(status) {
   if (!el) return;
   if (status === 'saving') {
     el.textContent = 'Saving…';
-    el.style.color = '#8b949e';
+    el.style.color = 'var(--text-muted)';
   } else if (status === 'saved') {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     el.textContent = `Saved ${time}`;
-    el.style.color = '#8b949e';
+    el.style.color = 'var(--text-muted)';
   } else {
     el.textContent = 'Save failed';
-    el.style.color = '#f85149';
+    el.style.color = 'var(--danger)';
   }
 }
 
@@ -205,9 +205,9 @@ function renderHistPanel() {
     return `
       <div class="hist-item" onclick="replayHistory(${origIdx})">
         <div class="hist-top">
-          <span style="color:${MC[h.method] || '#c9d1d9'};font-weight:700">${h.method}</span>
+          <span style="color:${MC[h.method] || 'var(--text)'};font-weight:700">${h.method}</span>
           ${badge}
-          <span style="margin-left:auto;color:#8b949e">${h.elapsed}ms</span>
+          <span style="margin-left:auto;color:var(--text-muted)">${h.elapsed}ms</span>
         </div>
         <div class="hist-url">${esc(h.url)}</div>
       </div>`;
