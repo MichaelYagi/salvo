@@ -76,6 +76,165 @@ function renderReqPanel() {
   }
 }
 
+// ─── Header name/value autocomplete ───────────────────────────────────────────
+// Common header names, suggested for the "name" field of header rows.
+const HEADER_NAME_SUGGESTIONS = [
+  'Accept', 'Accept-Charset', 'Accept-Encoding', 'Accept-Language', 'Accept-Ranges',
+  'Authorization', 'Cache-Control', 'Connection', 'Content-Disposition',
+  'Content-Encoding', 'Content-Length', 'Content-Type', 'Cookie', 'DNT', 'Host',
+  'If-Modified-Since', 'If-None-Match', 'Origin', 'Pragma', 'Referer', 'TE',
+  'Transfer-Encoding', 'Upgrade-Insecure-Requests', 'User-Agent',
+  'X-API-Key', 'X-Auth-Token', 'X-Correlation-ID', 'X-CSRF-Token',
+  'X-Forwarded-For', 'X-Request-ID', 'X-Requested-With',
+];
+
+// Common values for headers whose value is a known set of tokens (MIME types,
+// encodings, cache directives, ...). Keyed by lowercased header name.
+const HEADER_VALUE_SUGGESTIONS = (() => {
+  const mimeTypes = [
+    'application/json',
+    'application/xml',
+    'application/x-www-form-urlencoded',
+    'application/javascript',
+    'application/octet-stream',
+    'application/pdf',
+    'application/zip',
+    'application/graphql',
+    'application/ld+json',
+    'application/vnd.api+json',
+    'application/xhtml+xml',
+    'multipart/form-data',
+    'multipart/mixed',
+    'text/plain',
+    'text/html',
+    'text/css',
+    'text/csv',
+    'text/javascript',
+    'text/xml',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/svg+xml',
+    'image/webp',
+    'audio/mpeg',
+    'video/mp4',
+  ];
+
+  return {
+    'content-type':      mimeTypes,
+    'accept':            ['*/*', ...mimeTypes],
+    'accept-encoding':   ['gzip', 'deflate', 'br', 'compress', 'identity', '*'],
+    'content-encoding':  ['gzip', 'deflate', 'br', 'compress', 'identity'],
+    'transfer-encoding': ['chunked', 'gzip', 'deflate', 'identity'],
+    'accept-charset':    ['utf-8', 'iso-8859-1', 'us-ascii', '*'],
+    'accept-language':   ['en-US', 'en-GB', 'en', 'fr', 'de', 'es', 'it', 'pt-BR', 'pt', 'ru', 'zh-CN', 'zh-TW', 'ja', 'ko', 'nl', 'sv', 'pl', 'tr', 'ar', 'hi', '*'],
+    'cache-control':     ['no-cache', 'no-store', 'no-transform', 'max-age=0', 'max-age=3600', 'max-age=86400', 'must-revalidate', 'proxy-revalidate', 'private', 'public', 'immutable', 'only-if-cached'],
+    'connection':        ['keep-alive', 'close'],
+    'content-disposition': ['inline', 'attachment', 'form-data'],
+    'pragma':            ['no-cache'],
+    'te':                ['trailers', 'compress', 'deflate', 'gzip'],
+    'accept-ranges':     ['bytes', 'none'],
+    'x-requested-with':  ['XMLHttpRequest'],
+  };
+})();
+
+function getHeaderSuggestions(headerName) {
+  return HEADER_VALUE_SUGGESTIONS[String(headerName ?? '').trim().toLowerCase()] || null;
+}
+
+// `field` is 'key' (header name) or 'value' (header value).
+function showHeaderSuggest(i, field) {
+  const row = state.req.headers[i];
+  const all = field === 'key' ? HEADER_NAME_SUGGESTIONS : getHeaderSuggestions(row.key);
+  hideHeaderSuggest();
+  if (!all) return;
+
+  const q = (row[field] || '').toLowerCase();
+  const matches = all.filter(v => v.toLowerCase().includes(q));
+  if (!matches.length) return;
+
+  const input = document.getElementById(`kv-${field}-headers-${i}`);
+  const box   = document.getElementById('header-suggest');
+  if (!input || !box) return;
+
+  box.innerHTML = '';
+  box.dataset.target = `${i}:${field}`;
+  matches.forEach((m, idx) => {
+    const el = document.createElement('div');
+    el.className = 'hs-item' + (idx === 0 ? ' active' : '');
+    el.textContent = m;
+    // Hovering an item makes it the "active" one, so Tab fills whatever is highlighted.
+    el.addEventListener('mouseenter', () => {
+      box.querySelector('.hs-item.active')?.classList.remove('active');
+      el.classList.add('active');
+    });
+    // mousedown (not click) fires before the input's blur, so we can accept
+    // the suggestion without the dropdown disappearing first.
+    el.addEventListener('mousedown', e => { e.preventDefault(); acceptHeaderSuggest(i, field, m); });
+    box.appendChild(el);
+  });
+
+  const rect = input.getBoundingClientRect();
+  box.style.display = '';
+  box.style.left    = (rect.left + window.scrollX) + 'px';
+  box.style.top     = (rect.bottom + window.scrollY) + 'px';
+  box.style.width   = rect.width + 'px';
+}
+
+function hideHeaderSuggest() {
+  const box = document.getElementById('header-suggest');
+  if (box) box.style.display = 'none';
+}
+
+function acceptHeaderSuggest(i, field, value) {
+  state.req.headers[i][field] = value;
+  scheduleAutoSave();
+  updateTabBadges();
+  if (state.reqTab === 'curl') renderReqPanel();
+
+  const input = document.getElementById(`kv-${field}-headers-${i}`);
+  if (input) {
+    input.value = value;
+    input.focus();
+    input.setSelectionRange(value.length, value.length);
+  }
+  hideHeaderSuggest();
+
+  // Picking a header name immediately surfaces value suggestions for it.
+  if (field === 'key') {
+    const valueInput = document.getElementById(`kv-value-headers-${i}`);
+    if (valueInput) { valueInput.focus(); showHeaderSuggest(i, 'value'); }
+  }
+}
+
+function kvHeaderKeydown(i, field, event) {
+  const box = document.getElementById('header-suggest');
+  if (!box || box.style.display === 'none' || box.dataset.target !== `${i}:${field}`) return;
+
+  const items = [...box.querySelectorAll('.hs-item')];
+  if (!items.length) return;
+
+  if (event.key === 'Tab' || event.key === 'Enter') {
+    event.preventDefault();
+    const active = box.querySelector('.hs-item.active') || items[0];
+    acceptHeaderSuggest(i, field, active.textContent);
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    let idx = items.findIndex(el => el.classList.contains('active'));
+    items[idx]?.classList.remove('active');
+    idx = event.key === 'ArrowDown' ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
+    items[idx].classList.add('active');
+    items[idx].scrollIntoView({ block: 'nearest' });
+  } else if (event.key === 'Escape') {
+    hideHeaderSuggest();
+  }
+}
+
+function kvHeaderBlur() {
+  // Delay so a click/mousedown on a suggestion can be handled first.
+  setTimeout(hideHeaderSuggest, 150);
+}
+
 // ─── KV Editor (params / headers / form-data fields) ─────────────────────────
 
 function kvEditorHTML(rows, key) {
@@ -84,15 +243,24 @@ function kvEditorHTML(rows, key) {
 
   rows.forEach((row, i) => {
     const op = row.enabled ? 1 : .45;
+    const suggestAttrs = field => key === 'headers'
+      ? `id="kv-${field}-headers-${i}"
+               onfocus="showHeaderSuggest(${i},'${field}')"
+               onkeydown="kvHeaderKeydown(${i},'${field}',event)"
+               onblur="kvHeaderBlur()"
+               autocomplete="off"`
+      : '';
     html += `
       <div class="${hasNotes ? 'kv-grid-notes' : 'kv-grid'}">
         <input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="kvToggle('${key}',${i},this.checked)">
         <input value="${esc(row.key)}"
-               oninput="kvSet('${key}',${i},'key',this.value)"
+               ${suggestAttrs('key')}
+               oninput="kvSet('${key}',${i},'key',this.value)${key === 'headers' ? `;showHeaderSuggest(${i},'key')` : ''}"
                placeholder="name"
                style="opacity:${op}">
         <input value="${esc(row.value)}"
-               oninput="kvSet('${key}',${i},'value',this.value)"
+               ${suggestAttrs('value')}
+               oninput="kvSet('${key}',${i},'value',this.value)${key === 'headers' ? `;showHeaderSuggest(${i},'value')` : ''}"
                placeholder="value"
                style="opacity:${op}">
         ${hasNotes ? `<input value="${esc(row.note || '')}"
