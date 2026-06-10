@@ -1,4 +1,4 @@
-# Salvo
+    # Salvo
 
 A local-first HTTP client. No cloud, no accounts, no telemetry. Just a single HTML file and some JS/CSS that runs in any browser.
 

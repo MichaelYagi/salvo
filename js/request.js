@@ -56,6 +56,7 @@ function updateTabBadges() {
 
 function switchReqTab(tab) {
   state.reqTab = tab;
+  if (state.activeReqId) state.reqTabByReqId.set(state.activeReqId, tab);
   updateTabBadges();
   renderReqPanel();
 }

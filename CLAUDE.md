@@ -9,12 +9,27 @@ Salvo is a local-first HTTP client — a lightweight Postman alternative. Single
 ## Running locally
 
 ```bash
-python3 -m http.server 8080
-# or: npx serve .
+node server.js
 # then open http://localhost:8080
 ```
 
-Must use a server — `file://` won't work due to browser security restrictions on script loading.
+`server.js` is a stdlib-only Node HTTP server (no `npm install`, no dependencies). It serves the static files (`index.html`, `js/`, `css/`) and exposes a small JSON API used to load and save data from the `data/` directory:
+
+- `GET /api/data` — reads `data/` and returns `{ cols, envs, hist }`
+- `POST /api/save` — accepts `{ cols, envs, hist }` and writes it back to `data/`
+
+A plain static server (e.g. `python3 -m http.server`) won't work — Salvo needs these API endpoints to load and save its data.
+
+## Data storage (`data/`)
+
+`data/` is gitignored — it holds the user's local collections, environments, and history, all as plain JSON files.
+
+- **Collections are directories**: `data/<Collection Name>/`
+- **Requests are files**: `data/<Collection Name>/<Request Name>.json`, containing the Request object (see below), minus its `id` (ids are ephemeral and regenerated on load)
+- **Folders are NOT directories** — a request that belongs to a Postman-style folder has an extra `"folder": "<Folder Name>"` field in its JSON file. The directory layout is always flat, one level deep.
+- **Envs and history**: `data/_salvo/envs.json` and `data/_salvo/history.json`
+
+On load, `server.js` walks `data/`, groups requests by their `folder` field back into `Collection.folders`, and regenerates `id`s. On save, it wipes and rewrites every collection directory from the current in-memory state — renames/deletions are handled by this wipe-and-rewrite, not by diffing. Filenames are sanitized and de-duplicated (` (2)`, ` (3)`, ...) via `sanitizeName`/`uniqueName` in `server.js`.
 
 ## Architecture
 
@@ -24,15 +39,15 @@ All JS files share the **global browser scope** and are loaded as plain `<script
 
 | File | Owns |
 |------|------|
-| `js/state.js` | Global `state` object, `SK` storage keys, `MC` method colours, `persist()`, `scheduleAutoSave()`, `uid()`, `clone()`, `esc()`, `interp()`, `notify()`, `demoCollection()` |
+| `js/state.js` | Global `state` object, `MC` method colours, `scheduleAutoSave()`, `uid()`, `clone()`, `esc()`, `interp()`, `notify()` |
 | `js/sidebar.js` | `renderSidebar()`, collection/folder/request HTML generation, `toggleCol()`, `toggleFolder()`, `showCtxMenu()`, `hideCtxMenu()`, `colCtx()`, `reqCtx()` |
 | `js/curl.js` | `buildCurl()`, `curlPanelHTML()`, `copyCurl()` |
 | `js/request.js` | `showReqEditor()`, `syncReqEditor()`, `renderReqPanel()`, `switchReqTab()`, `updateTabBadges()`, `kvEditorHTML()`, `kvToggle/Set/Del/Add()`, `authHTML()`, `authTypeChange/Set()`, `bodyHTML()`, `bodyTypeChange/Set()`, `onMethodChange()`, `onReqNameChange()` |
 | `js/response.js` | `renderRespPanel()`, `switchRespTab()`, `copyResponse()`, `buildJsonTree()` |
 | `js/send.js` | `sendRequest()`, `cancelReq()`, `buildRequestArgs()`, `parseResponse()` |
 | `js/collections.js` | `findReq()`, `selectReq()`, `addCollection/Folder/Req()`, `deleteCol/Req()`, `dupReq()`, `renameCol()`, `exportCol()`, `importFile()`, `parsePostman()` |
-| `js/modals.js` | `openGitModal()`, `saveGitCfg()`, `gitPush()`, `gitPull()`, `setGitStatus()`, `openEnvModal()`, `closeEnvModal()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()`, `envSelect/Rename/SetVar/DelVar/AddVar/Use/Delete()`, `addEnv()`, `getSelEnv()` |
-| `js/app.js` | `init()`, `setupResizer()`, `toggleHistPanel()`, `renderHistPanel()`, `replayHistory()`, `clearHistory()` |
+| `js/modals.js` | `openEnvModal()`, `closeEnvModal()`, `renderEnvSelect()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()`, `envSelect/Rename/SetVar/DelVar/AddVar/Use/Delete()`, `addEnv()`, `getSelEnv()` |
+| `js/app.js` | `init()`, `loadData()`, `saveAll()`, `setupResizer()`, `toggleHistPanel()`, `renderHistPanel()`, `replayHistory()`, `clearHistory()` |
 
 > **Note:** `css/curl.js` is a stray file — it is not loaded by `index.html` and should be ignored. The active curl code is `js/curl.js`.
 
@@ -50,9 +65,8 @@ All JS files share the **global browser scope** and are loaded as plain `<script
 
 ```js
 state = {
-  // persisted to localStorage
+  // loaded from data/ via GET /api/data on init, auto-saved back via POST /api/save
   cols:    [],          // array of Collection objects
-  git:     { token, owner, repo, branch, path, auto },
   envs:    [],          // array of { id, name, vars: {} }
   hist:    [],          // array of { method, url, status, elapsed } — capped at 200
 
@@ -69,7 +83,8 @@ state = {
   showHist:        false,
   envSelId:        'default',
   abortCtrl:       null,
-  autoSyncTimer:   null,
+  selectedReqIds:  Set,
+  lastSelReqId:    null,
 }
 ```
 
@@ -117,13 +132,13 @@ state = {
 
 **`interp(s)`** — replaces `{{var}}` placeholders with values from the active environment. Call this in `send.js` when building the actual fetch request, not when storing/displaying.
 
-**`scheduleAutoSave()`** — debounces (500ms) saving `state.req` back into `state.cols` + `localStorage`, then chains into `scheduleAutoGitPush()` (2s debounce) if auto-sync is enabled. Call it from any function that mutates `state.req`. Don't call `persist()` directly from request editor functions.
+**`scheduleAutoSave()`** — debounces (500ms) writing `state.req` back into `state.cols` via `syncReqIntoCols()`, then calls `scheduleDiskSave()`. Call it from any function that mutates `state.req`.
 
-**`persist()`** — saves all four `state` slices to localStorage. Call it from collection CRUD operations, history updates, and settings saves. Not from per-keystroke handlers (use `scheduleAutoSave` instead).
+**`scheduleDiskSave()`** — debounces (800ms) a silent `saveAll(true)` call, which `POST`s `{ cols, envs, hist }` to `/api/save`. Call it after any state-mutating action (collection/folder/request CRUD, env edits, history changes) so changes persist to disk automatically. Errors still surface via a "Save failed" toast; silent saves don't show a "Saved" toast.
+
+**Saving to disk** — `Ctrl+S`/`Cmd+S` (handled in `init()` in `app.js`) still works and calls `saveAll()` (non-silent, shows a "Saved" toast) for an explicit manual save. On `beforeunload`, `init()` also flushes any pending edits via `syncReqIntoCols()` and writes to disk with `navigator.sendBeacon('/api/save', ...)` so closing the tab doesn't lose in-flight changes.
 
 **Tab rendering** — `renderReqPanel()` is the single dispatcher for the request editor panel. Adding a new tab means: adding a button to `#req-tabbar` in `index.html`, adding a case in the `switch` in `renderReqPanel()`, and implementing the HTML-returning function.
-
-**Git sync** — `gitPush()` and `gitPull()` in `modals.js` use the GitHub Contents API (`PUT /repos/:owner/:repo/contents/:path`). Push requires fetching the current file SHA first to avoid conflicts. The payload is base64-encoded JSON of `state.cols`.
 
 ## Things to be aware of
 
@@ -131,4 +146,4 @@ state = {
 - **`Set` objects in state** (`expandedCols`, `expandedFolders`) are runtime-only — they don't serialise to JSON, so they're not persisted and are always initialised fresh.
 - **Working copy pattern** — `state.req` is a `clone()` of the selected request. Edits go there first, then auto-save writes it back to `state.cols`. Always use `clone()` when copying a request object to avoid shared references.
 - **innerHTML vs DOM** — use `innerHTML` for rendering panels and sidebar rows (strings are `esc()`'d). Use DOM methods (`createElement`, `appendChild`) when rendering untrusted content like API response bodies (`buildJsonTree`).
-- **localStorage keys** are prefixed `sv_` (Salvo). Don't change them without a migration — it will wipe users' saved data.
+- **Auto-saves to disk** — any state-mutating action triggers a debounced (800ms) write to `data/` via `/api/save`, and `beforeunload` flushes pending changes via `sendBeacon`. Ctrl+S still works for an explicit save with a "Saved" toast.

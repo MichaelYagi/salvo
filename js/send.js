@@ -26,28 +26,31 @@ async function sendRequest() {
   const start = Date.now();
 
   try {
-    const { url: builtUrl, headers, body } = buildRequestArgs();
+    const { url: builtUrl, headers, bodyKind, bodyPayload } = buildRequestArgs();
 
-    const res = await fetch(builtUrl, {
-      method:  state.req.method,
-      headers,
-      body:    ['GET', 'HEAD'].includes(state.req.method) ? undefined : body,
+    const proxyRes = await fetch('/api/proxy', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ url: builtUrl, method: state.req.method, headers, bodyKind, body: bodyPayload }),
       signal:  state.abortCtrl.signal,
     });
 
+    const data = await proxyRes.json();
+    if (!data.ok) throw new Error(data.error);
+
     const elapsed = Date.now() - start;
-    state.resp    = await parseResponse(res, elapsed);
+    state.resp    = parseResponse(data, elapsed);
 
     // Log to history
     state.hist.push({
       method:  state.req.method,
       url:     builtUrl,
-      status:  res.status,
+      status:  data.status,
       elapsed,
     });
-    persist();
 
     if (state.showHist) renderHistPanel();
+    scheduleDiskSave();
 
   } catch (err) {
     const elapsed = Date.now() - start;
@@ -98,81 +101,88 @@ function buildRequestArgs() {
   }
 
   // Body
-  let body;
+  let bodyKind    = 'none';
+  let bodyPayload = null;
   const bt = state.req.body.type;
 
   if (bt === 'raw' && state.req.body.raw) {
-    body = interp(state.req.body.raw);
+    bodyKind    = 'raw';
+    bodyPayload = interp(state.req.body.raw);
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/json';
     }
   } else if (bt === 'formdata') {
-    body = new FormData();
-    state.req.body.formData
+    bodyKind    = 'formdata';
+    bodyPayload = state.req.body.formData
       .filter(f => f.enabled && f.key)
-      .forEach(f => body.append(f.key, f.value));
+      .map(f => ({ key: interp(f.key), value: interp(f.value) }));
   } else if (bt === 'urlencoded') {
-    body = new URLSearchParams();
-    state.req.body.formData
+    bodyKind    = 'urlencoded';
+    bodyPayload = state.req.body.formData
       .filter(f => f.enabled && f.key)
-      .forEach(f => body.append(f.key, f.value));
+      .map(f => ({ key: interp(f.key), value: interp(f.value) }));
     if (!headers['Content-Type']) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     }
   }
 
-  return { url: urlObj.toString(), headers, body };
+  return { url: urlObj.toString(), headers, bodyKind, bodyPayload };
 }
 
-// ─── Parse the fetch Response into our response state object ─────────────────
+// ─── Parse the proxied response into our response state object ───────────────
 
-async function parseResponse(res, elapsed) {
-  const respHeaders = {};
-  res.headers.forEach((v, k) => { respHeaders[k] = v; });
+function base64ToBytes(b64) {
+  const bin   = atob(b64 || '');
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
 
-  const ct = res.headers.get('content-type') || '';
+function parseResponse(data, elapsed) {
+  const respHeaders = data.headers || {};
+  const ct          = respHeaders['content-type'] || '';
+  const bytes       = base64ToBytes(data.bodyBase64);
 
   if (ct.includes('image')) {
-    const blob = await res.blob();
+    const blob = new Blob([bytes], { type: ct });
     return {
-      status:     res.status,
-      statusText: res.statusText,
+      status:     data.status,
+      statusText: data.statusText,
       headers:    respHeaders,
       body:       URL.createObjectURL(blob),
       bodyType:   'image',
       elapsed,
-      size:       blob.size,
+      size:       bytes.length,
     };
   }
 
   const isText = !ct || ct.startsWith('text/') || ct.includes('json') || ct.includes('xml') || ct.includes('javascript');
   if (!isText) {
-    const blob = await res.blob();
     return {
-      status:     res.status,
-      statusText: res.statusText,
+      status:     data.status,
+      statusText: data.statusText,
       headers:    respHeaders,
       body:       null,
       bodyType:   'binary',
       elapsed,
-      size:       blob.size,
+      size:       bytes.length,
     };
   }
 
-  let text     = await res.text();
+  let text     = new TextDecoder('utf-8').decode(bytes);
   let bodyType = 'text';
 
-  if (ct.includes('json')) {
+  if (ct.includes('json') && bytes.length <= JSON_TREE_MAX_BYTES) {
     try { text = JSON.stringify(JSON.parse(text), null, 2); bodyType = 'json'; } catch {}
   }
 
   return {
-    status:     res.status,
-    statusText: res.statusText,
+    status:     data.status,
+    statusText: data.statusText,
     headers:    respHeaders,
     body:       text,
     bodyType,
     elapsed,
-    size:       new Blob([text]).size,
+    size:       bytes.length,
   };
 }

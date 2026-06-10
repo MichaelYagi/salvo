@@ -44,7 +44,7 @@ html, body {
   flex-shrink: 0;
 }
 
-.logo    { font-weight: 800; font-size: 16px; color: #00d9c8; letter-spacing: -.5px; user-select: none; }
+.logo    { font-weight: 800; font-size: 16px; color: #58a6ff; letter-spacing: -.5px; user-select: none; }
 .tb-div  { color: #30363d; font-size: 20px; line-height: 1; }
 .sep     { flex: 1; }
 
@@ -60,12 +60,12 @@ input, select, textarea {
   outline: none;
 }
 
-input:focus, select:focus, textarea:focus { border-color: #00d9c8; }
+input:focus, select:focus, textarea:focus { border-color: #58a6ff; }
 select option  { background: #161b22; }
 textarea       { resize: vertical; }
 
-input[type="checkbox"] { accent-color: #00d9c8; cursor: pointer; width: 14px; height: 14px; }
-input[type="radio"]    { accent-color: #00d9c8; cursor: pointer; }
+input[type="checkbox"] { accent-color: #58a6ff; cursor: pointer; width: 14px; height: 14px; }
+input[type="radio"]    { accent-color: #58a6ff; cursor: pointer; }
 
 /* ─── Buttons ──────────────────────────────────────────────────────────────── */
 button {
@@ -81,8 +81,8 @@ button {
 }
 button:hover { background: #21262d; color: #c9d1d9; }
 
-.btn-primary         { background: #00d9c8 !important; color: #0f1117 !important; font-weight: 700; padding: 5px 14px; }
-.btn-primary:hover   { opacity: .85; background: #00d9c8 !important; }
+.btn-primary         { background: #58a6ff !important; color: #0f1117 !important; font-weight: 700; padding: 5px 14px; }
+.btn-primary:hover   { opacity: .85; background: #58a6ff !important; }
 .btn-danger          { color: #f85149 !important; }
 .btn-danger:hover    { background: #2d0f0f !important; }
 
@@ -113,15 +113,15 @@ button:hover { background: #21262d; color: #c9d1d9; }
   border-radius: 0;
 }
 .tab:hover        { background: none; color: #c9d1d9; }
-.tab.active       { color: #00d9c8; border-bottom-color: #00d9c8; }
-.tab-badge        { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 10px; font-size: 10px; font-weight: 600; background: #00d9c822; color: #00d9c8; }
+.tab.active       { color: #58a6ff; border-bottom-color: #58a6ff; }
+.tab-badge        { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 10px; font-size: 10px; font-weight: 600; background: #58a6ff22; color: #58a6ff; }
 
 /* ─── Generic scrollable panel ─────────────────────────────────────────────── */
 .panel { flex: 1; overflow-y: auto; padding: 12px; }
 
 /* ─── Spinner ──────────────────────────────────────────────────────────────── */
 .spinner       { display: inline-flex; gap: 3px; align-items: center; }
-.spinner span  { width: 5px; height: 5px; border-radius: 50%; background: #00d9c8; animation: rf-pulse 1.2s ease-in-out infinite; }
+.spinner span  { width: 5px; height: 5px; border-radius: 50%; background: #58a6ff; animation: rf-pulse 1.2s ease-in-out infinite; }
 .spinner span:nth-child(2) { animation-delay: .2s; }
 .spinner span:nth-child(3) { animation-delay: .4s; }
 

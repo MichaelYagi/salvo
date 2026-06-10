@@ -18,7 +18,7 @@
   flex-shrink: 0;
   transition: background .15s;
 }
-#resizer:hover { background: #00d9c8; }
+#resizer:hover { background: #58a6ff; }
 
 /* ─── Sidebar Toolbar ───────────────────────────────────────────────────────── */
 #sb-search-row {
@@ -44,7 +44,7 @@
   background: #21262d;
   color: #c9d1d9;
 }
-#sb-actions .btn-primary { background: #00d9c8 !important; border-color: #00d9c8; }
+#sb-actions .btn-primary { background: #58a6ff !important; border-color: #58a6ff; }
 
 #col-list  { flex: 1; overflow-y: auto; padding: 3px 0; }
 
@@ -75,7 +75,7 @@
 
 .col-name {
   font-weight: 700;
-  color: #00d9c8;
+  color: #58a6ff;
   font-size: 12px;
   flex: 1;
   overflow: hidden;
@@ -118,8 +118,50 @@
   user-select: none;
   border-left: 2px solid transparent;
 }
-.req-row:hover  { background: #161b22; }
-.req-row.active { background: #161b22; border-left-color: #00d9c8; }
+.req-row:hover    { background: #161b22; }
+.req-row.active   { background: #161b22; border-left-color: #58a6ff; }
+.req-row.selected { background: #0d1a2d; }
+
+.req-check {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #388bfd;
+  text-align: center;
+}
+
+.req-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #8b949e;
+  padding: 0 4px;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.req-row:hover .req-menu-btn,
+.req-row.selected .req-menu-btn { display: block; }
+
+/* ─── Selection Banner ──────────────────────────────────────────────────────── */
+.sel-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: #0d1117;
+  border-bottom: 1px solid #388bfd44;
+  font-size: 11px;
+  color: #388bfd;
+}
+.sel-banner span { flex: 1; font-weight: 600; }
+.sel-banner button { font-size: 11px; padding: 2px 7px; border: 1px solid #30363d; border-radius: 4px; background: #21262d; color: #c9d1d9; cursor: pointer; }
+.sel-clear  { color: #8b949e !important; }
+.sel-danger { color: #f85149 !important; }
 
 .req-method {
   font-weight: 700;
@@ -147,3 +189,4 @@
 .ctx-item:hover  { background: #21262d; }
 .ctx-item.danger { color: #f85149; }
 .ctx-sep         { border-top: 1px solid #30363d; margin: 2px 0; }
+

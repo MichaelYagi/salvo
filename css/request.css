@@ -58,13 +58,13 @@
 
 .kv-del          { color: #f85149 !important; font-size: 15px; padding: 2px 4px; }
 .kv-del:hover    { background: #2d0f0f !important; }
-.kv-add          { color: #00d9c8; margin-top: 4px; }
+.kv-add          { color: #58a6ff; margin-top: 4px; }
 .kv-add:hover    { background: none !important; opacity: .8; }
 
 /* ─── Body Editor ───────────────────────────────────────────────────────────── */
 .body-types             { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
 .body-types label       { display: flex; align-items: center; gap: 5px; cursor: pointer; color: #8b949e; }
-.body-types label.active-type { color: #00d9c8; }
+.body-types label.active-type { color: #58a6ff; }
 
 #body-raw-area {
   width: 100%;

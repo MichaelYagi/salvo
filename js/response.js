@@ -79,7 +79,12 @@ function renderRespPanel() {
       } catch { /* fall through to plain text */ }
     }
 
-    wrap.innerHTML = `<pre>${esc(resp.body)}</pre>`;
+    let notice = '';
+    if ((resp.headers['content-type'] || '').includes('json') && resp.size > JSON_TREE_MAX_BYTES) {
+      notice = `<div class="muted" style="margin-bottom:6px">Response is large (${(resp.size / 1024 / 1024).toFixed(1)} MB) — showing raw text instead of the JSON tree.</div>`;
+    }
+
+    wrap.innerHTML = `${notice}<pre>${esc(resp.body)}</pre>`;
 
   // Headers tab
   } else {

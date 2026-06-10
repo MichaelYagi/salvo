@@ -1,12 +1,104 @@
+// ─── Data loading / saving (data/ via server.js) ───────────────────────────────
+
+function normalizeReq(r) {
+  return {
+    id:      uid(),
+    name:    r.name || 'Untitled',
+    method:  (r.method || 'GET').toUpperCase(),
+    url:     r.url || '',
+    params:  r.params  || [],
+    headers: r.headers || [],
+    body:    r.body || { type: 'none', raw: '', formData: [] },
+    auth:    r.auth || { type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '' },
+  };
+}
+
+async function loadData() {
+  const res  = await fetch('/api/data');
+  const data = await res.json();
+
+  state.cols = (data.cols || []).map(c => ({
+    id:       uid(),
+    name:     c.name,
+    requests: (c.requests || []).map(normalizeReq),
+    folders:  (c.folders  || []).map(f => ({
+      id:       uid(),
+      name:     f.name,
+      requests: (f.requests || []).map(normalizeReq),
+    })),
+  }));
+
+  state.envs = data.envs?.length ? data.envs : [{ id: 'default', name: 'No Environment', vars: {} }];
+  state.hist = data.hist || [];
+
+  state.expandedCols = new Set(state.cols.map(c => c.id));
+}
+
+async function saveAll(silent = false) {
+  setSaveStatus('saving');
+  try {
+    const res = await fetch('/api/save', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ cols: state.cols, envs: state.envs, hist: state.hist }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setSaveStatus('saved');
+      if (!silent) notify('Saved', 'success');
+    } else {
+      setSaveStatus('error');
+      notify('Save failed: ' + data.error, 'error');
+    }
+  } catch (e) {
+    setSaveStatus('error');
+    notify('Save failed: ' + e.message, 'error');
+  }
+}
+
+function setSaveStatus(status) {
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  if (status === 'saving') {
+    el.textContent = 'Saving…';
+    el.style.color = '#8b949e';
+  } else if (status === 'saved') {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    el.textContent = `Saved ${time}`;
+    el.style.color = '#8b949e';
+  } else {
+    el.textContent = 'Save failed';
+    el.style.color = '#f85149';
+  }
+}
+
 // ─── App Init ─────────────────────────────────────────────────────────────────
 
-function init() {
+async function init() {
+  try {
+    await loadData();
+  } catch (e) {
+    notify('Could not load data/: ' + e.message, 'error');
+  }
+
   renderEnvSelect();
   renderSidebar();
   setupResizer();
-
-  // Close context menu on any click outside it
   document.addEventListener('click', hideCtxMenu);
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveAll();
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    clearTimeout(_diskSaveTimer);
+    syncReqIntoCols();
+    const payload = JSON.stringify({ cols: state.cols, envs: state.envs, hist: state.hist });
+    navigator.sendBeacon('/api/save', new Blob([payload], { type: 'application/json' }));
+  });
 }
 
 // ─── Sidebar Drag-to-Resize ───────────────────────────────────────────────────
@@ -104,6 +196,7 @@ function replayHistory(i) {
   };
   state.activeReqId = null;
   state.resp        = null;
+  state.reqTab      = 'headers';
   state.showHist    = false;
 
   document.getElementById('hist-panel').style.display  = 'none';
@@ -113,9 +206,9 @@ function replayHistory(i) {
 
 function clearHistory() {
   state.hist = [];
-  persist();
   renderHistPanel();
+  scheduleDiskSave();
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-init();
+init().catch(err => notify(err.message, 'error'));

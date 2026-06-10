@@ -14,7 +14,7 @@ function selectReq(id) {
   state.activeReqId = id;
   state.req         = clone(r);
   state.resp        = null;
-  state.reqTab      = 'params';
+  state.reqTab      = state.reqTabByReqId.get(id) || 'headers';
   renderSidebar();
   showReqEditor();
 }
@@ -25,22 +25,22 @@ function addCollection() {
   const col = { id: uid(), name: 'New Collection', folders: [], requests: [] };
   state.cols.push(col);
   state.expandedCols.add(col.id);
-  persist();
   renderSidebar();
+  scheduleDiskSave();
 }
 
 function renameCol(id) {
   const col = state.cols.find(c => c.id === id);
   if (!col) return;
   const name = prompt('Rename collection:', col.name);
-  if (name !== null) { col.name = name; persist(); renderSidebar(); }
+  if (name !== null) { col.name = name; renderSidebar(); scheduleDiskSave(); }
 }
 
 function deleteCol(id) {
   if (!confirm('Delete this collection?')) return;
   state.cols = state.cols.filter(c => c.id !== id);
-  persist();
   renderSidebar();
+  scheduleDiskSave();
 }
 
 function exportCol(id) {
@@ -53,6 +53,77 @@ function exportCol(id) {
   a.click();
 }
 
+// ─── Postman v2.1.0 serialisation ─────────────────────────────────────────────
+
+function colToPostman(col) {
+  function toPostmanItem(r) {
+    const header = r.headers.map(h => ({ key: h.key, value: h.value, disabled: !h.enabled }));
+
+    const urlObj = { raw: r.url };
+    if (r.params.length) {
+      urlObj.query = r.params.map(p => ({ key: p.key, value: p.value, disabled: !p.enabled }));
+    }
+
+    const request = { method: r.method, header, url: urlObj };
+
+    if (r.body.type === 'raw' && r.body.raw) {
+      request.body = {
+        mode: 'raw',
+        raw:  r.body.raw,
+        options: { raw: { language: r.body.contentType || 'json' } },
+      };
+    } else if (r.body.type === 'formdata') {
+      request.body = {
+        mode:     'formdata',
+        formdata: r.body.formData.map(f => ({ key: f.key, value: f.value, disabled: !f.enabled, type: 'text' })),
+      };
+    } else if (r.body.type === 'urlencoded') {
+      request.body = {
+        mode:       'urlencoded',
+        urlencoded: r.body.formData.map(f => ({ key: f.key, value: f.value, disabled: !f.enabled })),
+      };
+    }
+
+    if (r.auth.type === 'bearer') {
+      request.auth = { type: 'bearer', bearer: [{ key: 'token', value: r.auth.token, type: 'string' }] };
+    } else if (r.auth.type === 'basic') {
+      request.auth = { type: 'basic', basic: [
+        { key: 'username', value: r.auth.username, type: 'string' },
+        { key: 'password', value: r.auth.password, type: 'string' },
+      ]};
+    } else if (r.auth.type === 'apikey') {
+      request.auth = { type: 'apikey', apikey: [
+        { key: 'key',   value: r.auth.apiKey,   type: 'string' },
+        { key: 'value', value: r.auth.apiValue,  type: 'string' },
+        { key: 'in',    value: 'header',          type: 'string' },
+      ]};
+    }
+
+    return { name: r.name, request };
+  }
+
+  return {
+    info: {
+      name:   col.name,
+      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+    },
+    item: [
+      ...col.folders.map(f => ({ name: f.name, item: f.requests.map(toPostmanItem) })),
+      ...col.requests.map(toPostmanItem),
+    ],
+  };
+}
+
+function exportColAsPostman(id) {
+  const col = state.cols.find(c => c.id === id);
+  if (!col) return;
+  const blob = new Blob([JSON.stringify(colToPostman(col), null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = col.name + '.postman_collection.json';
+  a.click();
+}
+
 // ─── Folder CRUD ──────────────────────────────────────────────────────────────
 
 function addFolder(colId) {
@@ -60,8 +131,8 @@ function addFolder(colId) {
   if (!col) return;
   col.folders.push({ id: uid(), name: 'New Folder', requests: [] });
   state.expandedCols.add(colId);
-  persist();
   renderSidebar();
+  scheduleDiskSave();
 }
 
 // ─── Request CRUD ─────────────────────────────────────────────────────────────
@@ -91,28 +162,27 @@ function addReq(colId, folderId = null) {
     col.requests.push(r);
   }
 
-  persist();
   selectReq(r.id);
   renderSidebar();
+  scheduleDiskSave();
 }
 
 function deleteReq(id) {
-  state.cols = state.cols.map(c => ({
-    ...c,
-    requests: c.requests.filter(r => r.id !== id),
-    folders:  c.folders.map(f => ({ ...f, requests: f.requests.filter(r => r.id !== id) })),
-  }));
+  deleteReqs([id]);
+}
 
-  if (state.activeReqId === id) {
-    state.activeReqId = null;
-    state.req         = null;
-    state.resp        = null;
-    document.getElementById('req-editor').style.display   = 'none';
-    document.getElementById('empty-state').style.display  = 'flex';
+function renameReq(id) {
+  const r = findReq(id);
+  if (!r) return;
+  const name = prompt('Rename request:', r.name);
+  if (name === null) return;
+  r.name = name;
+  if (state.req && state.req.id === id) {
+    state.req.name = name;
+    document.getElementById('req-name-input').value = name;
   }
-
-  persist();
   renderSidebar();
+  scheduleDiskSave();
 }
 
 function dupReq(id) {
@@ -124,33 +194,159 @@ function dupReq(id) {
   if (!col) return;
 
   col.requests.push(copy);
-  persist();
   selectReq(copy.id);
   renderSidebar();
+  scheduleDiskSave();
 }
 
-// ─── Postman v2.x Import ──────────────────────────────────────────────────────
+// ─── Move / Delete (single and batch) ────────────────────────────────────────
 
-function importFile(event) {
+function moveReqs(ids, targetType, targetId) {
+  const idSet = new Set(ids);
+  const moved = [];
+
+  state.cols = state.cols.map(c => ({
+    ...c,
+    requests: c.requests.filter(r => { if (idSet.has(r.id)) { moved.push(clone(r)); return false; } return true; }),
+    folders:  c.folders.map(f => ({
+      ...f,
+      requests: f.requests.filter(r => { if (idSet.has(r.id)) { moved.push(clone(r)); return false; } return true; }),
+    })),
+  }));
+
+  if (!moved.length) return;
+
+  if (targetType === 'col') {
+    const col = state.cols.find(c => c.id === targetId);
+    if (col) { moved.forEach(r => col.requests.push(r)); state.expandedCols.add(targetId); }
+  } else if (targetType === 'folder') {
+    for (const col of state.cols) {
+      const folder = col.folders.find(f => f.id === targetId);
+      if (folder) {
+        moved.forEach(r => folder.requests.push(r));
+        state.expandedCols.add(col.id);
+        state.expandedFolders.add(targetId);
+        break;
+      }
+    }
+  }
+
+  state.selectedReqIds = new Set();
+  renderSidebar();
+  scheduleDiskSave();
+}
+
+function deleteReqs(ids) {
+  const idSet = new Set(ids);
+  state.cols = state.cols.map(c => ({
+    ...c,
+    requests: c.requests.filter(r => !idSet.has(r.id)),
+    folders:  c.folders.map(f => ({ ...f, requests: f.requests.filter(r => !idSet.has(r.id)) })),
+  }));
+
+  if (idSet.has(state.activeReqId)) {
+    state.activeReqId = null;
+    state.req         = null;
+    state.resp        = null;
+    document.getElementById('req-editor').style.display  = 'none';
+    document.getElementById('empty-state').style.display = 'flex';
+  }
+
+  state.selectedReqIds = new Set();
+  renderSidebar();
+  scheduleDiskSave();
+}
+
+// ─── Backup export / import (all collections, as plain JSON) ──────────────────
+
+// Exports every collection (requests + folders, no envs/history) as a single
+// JSON file that can be re-imported via importAny() — by this Salvo instance
+// or shared with a team and merged into theirs.
+function exportAll() {
+  const payload = { cols: clone(state.cols) };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'salvo-export.json';
+  a.click();
+}
+
+// Merge a { cols } payload into the current state. Existing collections/folders
+// are matched by name; requests with a name that already exists in the matching
+// collection/folder are skipped.
+function mergeImportedData(data) {
+  const importedCols = (data.cols || []).map(c => ({
+    name:     c.name,
+    requests: (c.requests || []).map(normalizeReq),
+    folders:  (c.folders  || []).map(f => ({
+      name:     f.name,
+      requests: (f.requests || []).map(normalizeReq),
+    })),
+  }));
+
+  let added = 0, skipped = 0;
+
+  importedCols.forEach(ic => {
+    let col = state.cols.find(c => c.name === ic.name);
+    if (!col) {
+      col = { id: uid(), name: ic.name, requests: [], folders: [] };
+      state.cols.push(col);
+    }
+    state.expandedCols.add(col.id);
+
+    ic.requests.forEach(r => {
+      if (col.requests.some(x => x.name === r.name)) { skipped++; return; }
+      col.requests.push(r);
+      added++;
+    });
+
+    ic.folders.forEach(ifo => {
+      let folder = col.folders.find(f => f.name === ifo.name);
+      if (!folder) {
+        folder = { id: uid(), name: ifo.name, requests: [] };
+        col.folders.push(folder);
+      }
+      ifo.requests.forEach(r => {
+        if (folder.requests.some(x => x.name === r.name)) { skipped++; return; }
+        folder.requests.push(r);
+        added++;
+      });
+    });
+  });
+
+  renderSidebar();
+  scheduleDiskSave();
+
+  const skippedMsg = skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}` : '';
+  notify(`Imported ${added} request${added === 1 ? '' : 's'}${skippedMsg}`, 'success');
+}
+
+// Dispatches based on JSON shape: a Salvo export ({ cols }) is merged into the
+// current collections; a Postman v2.x collection ({ info, item }) is added as
+// a new collection.
+async function importAny(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      const col  = parsePostman(data);
+  try {
+    const data = JSON.parse(await file.text());
+
+    if (Array.isArray(data.cols)) {
+      mergeImportedData(data);
+    } else if (data.item) {
+      const col = parsePostman(data);
       state.cols.push(col);
       state.expandedCols.add(col.id);
-      persist();
       renderSidebar();
+      scheduleDiskSave();
       notify('Imported: ' + col.name, 'success');
-    } catch (err) {
-      notify('Import failed: ' + err.message, 'error');
+    } else {
+      throw new Error('Not a Salvo export or Postman collection');
     }
-  };
+  } catch (err) {
+    notify('Import failed: ' + err.message, 'error');
+  }
 
-  reader.readAsText(file);
   event.target.value = '';
 }
 
