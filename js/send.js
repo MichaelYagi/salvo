@@ -1,49 +1,52 @@
 // ─── Send Request ─────────────────────────────────────────────────────────────
 
 async function sendRequest() {
-  if (!state.req || state.loading) return;
+  const tab = activeTab();
+  if (!tab || tab.loading) return;
 
-  state.abortCtrl = new AbortController();
-  state.loading   = true;
-  state.resp      = null;
-  state.respTab   = 'body';
+  tab.abortCtrl = new AbortController();
+  tab.loading   = true;
+  tab.resp      = null;
+  tab.respTab   = 'body';
 
-  // Switch response tabs to body and show spinner
-  document.querySelectorAll('[data-rtab]').forEach(t =>
-    t.classList.toggle('active', t.dataset.rtab === 'body')
-  );
-  document.getElementById('send-btn').textContent = 'Cancel';
-  document.getElementById('send-btn').onclick     = cancelReq;
-  document.getElementById('resp-body-wrap').innerHTML =
-    `<div style="display:flex;align-items:center;gap:8px;color:#8b949e">
-       <div class="spinner"><span></span><span></span><span></span></div> Sending…
-     </div>`;
-  document.getElementById('status-badge').style.display   = 'none';
-  document.getElementById('resp-time').style.display      = 'none';
-  document.getElementById('resp-size').style.display      = 'none';
-  document.getElementById('copy-resp-btn').style.display  = 'none';
+  if (activeTab() === tab) {
+    // Switch response tabs to body and show spinner
+    document.querySelectorAll('[data-rtab]').forEach(t =>
+      t.classList.toggle('active', t.dataset.rtab === 'body')
+    );
+    document.getElementById('send-btn').textContent = 'Cancel';
+    document.getElementById('send-btn').onclick     = cancelReq;
+    document.getElementById('resp-body-wrap').innerHTML =
+      `<div style="display:flex;align-items:center;gap:8px;color:#8b949e">
+         <div class="spinner"><span></span><span></span><span></span></div> Sending…
+       </div>`;
+    document.getElementById('status-badge').style.display   = 'none';
+    document.getElementById('resp-time').style.display      = 'none';
+    document.getElementById('resp-size').style.display      = 'none';
+    document.getElementById('copy-resp-btn').style.display  = 'none';
+  }
 
   const start = Date.now();
 
   try {
-    const { url: builtUrl, headers, bodyKind, bodyPayload } = buildRequestArgs();
+    const { url: builtUrl, headers, bodyKind, bodyPayload, digestAuth } = await buildRequestArgs(tab.req);
 
     const proxyRes = await fetch('/api/proxy', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ url: builtUrl, method: state.req.method, headers, bodyKind, body: bodyPayload }),
-      signal:  state.abortCtrl.signal,
+      body:    JSON.stringify({ url: builtUrl, method: tab.req.method, headers, bodyKind, body: bodyPayload, digestAuth }),
+      signal:  tab.abortCtrl.signal,
     });
 
     const data = await proxyRes.json();
     if (!data.ok) throw new Error(data.error);
 
     const elapsed = Date.now() - start;
-    state.resp    = parseResponse(data, elapsed);
+    tab.resp      = parseResponse(data, elapsed);
 
     // Log to history
     state.hist.push({
-      method:  state.req.method,
+      method:  tab.req.method,
       url:     builtUrl,
       status:  data.status,
       elapsed,
@@ -54,42 +57,46 @@ async function sendRequest() {
 
   } catch (err) {
     const elapsed = Date.now() - start;
-    state.resp = err.name === 'AbortError'
+    tab.resp = err.name === 'AbortError'
       ? { error: 'Request cancelled', elapsed }
       : { error: err.message, elapsed };
 
   } finally {
-    state.loading = false;
-    document.getElementById('send-btn').textContent = 'Send';
-    document.getElementById('send-btn').onclick     = sendRequest;
-    renderRespPanel();
+    tab.loading = false;
+    if (activeTab() === tab) {
+      document.getElementById('send-btn').textContent = 'Send';
+      document.getElementById('send-btn').onclick     = sendRequest;
+      renderRespPanel();
+    }
   }
 }
 
 function cancelReq() {
-  state.abortCtrl?.abort();
+  activeTab()?.abortCtrl?.abort();
 }
 
 // ─── Build fetch arguments from the active request ────────────────────────────
 
-function buildRequestArgs() {
+async function buildRequestArgs(req) {
   // URL + query params
-  let raw = interp(state.req.url);
+  let raw = interp(req.url);
   if (!raw.match(/^https?:\/\//i)) raw = 'https://' + raw;
   const urlObj = new URL(raw);
 
-  state.req.params
+  req.params
     .filter(p => p.enabled && p.key)
     .forEach(p => urlObj.searchParams.set(interp(p.key), interp(p.value)));
 
   // Headers
   const headers = {};
-  state.req.headers
+  req.headers
     .filter(h => h.enabled && h.key)
     .forEach(h => { headers[interp(h.key)] = interp(h.value); });
 
   // Auth
-  const auth = state.req.auth;
+  const auth = req.auth;
+  let digestAuth = null;
+
   if (auth.type === 'bearer' && auth.token) {
     headers['Authorization'] = `Bearer ${interp(auth.token)}`;
   }
@@ -99,26 +106,37 @@ function buildRequestArgs() {
   if (auth.type === 'apikey' && auth.apiKey) {
     headers[auth.apiKey] = auth.apiValue;
   }
+  if (auth.type === 'oauth2_cc' || auth.type === 'oauth2_pwd') {
+    const token = await ensureOAuthToken(auth);
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (auth.type === 'digest' && (auth.username || auth.password)) {
+    digestAuth = { username: interp(auth.username), password: interp(auth.password) };
+  }
+  if (auth.type === 'jwt' && auth.jwtSecret) {
+    const jwt = await buildJwt(interp(auth.jwtSecret), auth.jwtPayload);
+    headers['Authorization'] = `Bearer ${jwt}`;
+  }
 
   // Body
   let bodyKind    = 'none';
   let bodyPayload = null;
-  const bt = state.req.body.type;
+  const bt = req.body.type;
 
-  if (bt === 'raw' && state.req.body.raw) {
+  if (bt === 'raw' && req.body.raw) {
     bodyKind    = 'raw';
-    bodyPayload = interp(state.req.body.raw);
+    bodyPayload = interp(req.body.raw);
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/json';
     }
   } else if (bt === 'formdata') {
     bodyKind    = 'formdata';
-    bodyPayload = state.req.body.formData
+    bodyPayload = req.body.formData
       .filter(f => f.enabled && f.key)
       .map(f => ({ key: interp(f.key), value: interp(f.value) }));
   } else if (bt === 'urlencoded') {
     bodyKind    = 'urlencoded';
-    bodyPayload = state.req.body.formData
+    bodyPayload = req.body.formData
       .filter(f => f.enabled && f.key)
       .map(f => ({ key: interp(f.key), value: interp(f.value) }));
     if (!headers['Content-Type']) {
@@ -126,7 +144,88 @@ function buildRequestArgs() {
     }
   }
 
-  return { url: urlObj.toString(), headers, bodyKind, bodyPayload };
+  return { url: urlObj.toString(), headers, bodyKind, bodyPayload, digestAuth };
+}
+
+// ─── OAuth 2.0 token acquisition (Client Credentials / Password Grant) ────────
+
+async function ensureOAuthToken(auth) {
+  if (auth.cachedToken && auth.cachedExpiry > Date.now() + 5000) return auth.cachedToken;
+  return fetchOAuthToken(auth);
+}
+
+async function fetchOAuthToken(auth) {
+  if (!auth.accessTokenUrl) throw new Error('Access Token URL is required');
+
+  const params = { grant_type: auth.type === 'oauth2_pwd' ? 'password' : 'client_credentials' };
+  if (auth.clientId)     params.client_id     = interp(auth.clientId);
+  if (auth.clientSecret) params.client_secret = interp(auth.clientSecret);
+  if (auth.scope)        params.scope         = interp(auth.scope);
+  if (auth.type === 'oauth2_pwd') {
+    params.username = interp(auth.username);
+    params.password = interp(auth.password);
+  }
+
+  const body = Object.entries(params).map(([key, value]) => ({ key, value }));
+  const res  = await fetch('/api/proxy', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url:      interp(auth.accessTokenUrl),
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/x-www-form-urlencoded' },
+      bodyKind: 'urlencoded',
+      body,
+    }),
+  });
+
+  const data = await res.json();
+  if (!data.ok || data.status < 200 || data.status >= 300) {
+    throw new Error('Token request failed: ' + (data.error || `HTTP ${data.status}`));
+  }
+
+  const json = JSON.parse(new TextDecoder('utf-8').decode(base64ToBytes(data.bodyBase64)));
+  if (!json.access_token) throw new Error('Token response missing access_token');
+
+  auth.cachedToken  = json.access_token;
+  auth.cachedExpiry = Date.now() + (json.expires_in ? json.expires_in * 1000 : 3600_000);
+  scheduleAutoSave();
+  return auth.cachedToken;
+}
+
+function manualFetchOAuthToken() {
+  const auth = activeTab().req.auth;
+  fetchOAuthToken(auth)
+    .then(() => { renderReqPanel(); notify('Token acquired', 'success'); })
+    .catch(e => notify(e.message, 'error'));
+}
+
+// ─── JWT (HS256) signing ───────────────────────────────────────────────────────
+
+async function buildJwt(secret, payloadStr) {
+  let payload;
+  try { payload = JSON.parse(payloadStr || '{}'); } catch { payload = {}; }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.iat === undefined) payload.iat = now;
+  if (payload.exp === undefined) payload.exp = now + 3600;
+
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const enc  = obj => base64url(new TextEncoder().encode(JSON.stringify(obj)));
+  const data = `${enc(header)}.${enc(payload)}`;
+
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+
+  return `${data}.${base64url(new Uint8Array(sig))}`;
+}
+
+function base64url(bytes) {
+  let str = '';
+  bytes.forEach(b => str += String.fromCharCode(b));
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // ─── Parse the proxied response into our response state object ───────────────

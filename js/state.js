@@ -22,17 +22,12 @@ const state = {
   hist:    [],
 
   activeEnv:       'default',
-  activeReqId:     null,
-  req:             null,   // working copy of the selected request
-  resp:            null,
-  reqTab:          'params',
-  respTab:         'body',
-  loading:         false,
+  tabs:            [],     // open request tabs — see js/tabs.js
+  activeTabId:     null,
   expandedCols:    new Set(),
   expandedFolders: new Set(),
   showHist:        false,
   envSelId:        'default',
-  abortCtrl:       null,
   selectedReqIds:  new Set(),
   lastSelReqId:    null,
   reqTabByReqId:   new Map(), // remembers the last-active tab per request (runtime only)
@@ -42,16 +37,17 @@ const state = {
 let _autoSaveTimer = null;
 
 function scheduleAutoSave() {
+  const tab = activeTab();
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(() => {
-    syncReqIntoCols();
+    syncTabIntoCols(tab);
     scheduleDiskSave();
   }, 500);
 }
 
-function syncReqIntoCols() {
-  if (!state.req) return;
-  const r = clone(state.req);
+function syncTabIntoCols(tab) {
+  if (!tab || !tab.reqId) return;
+  const r = clone(tab.req);
   state.cols = state.cols.map(c => {
     const inRoot   = c.requests.some(x => x.id === r.id);
     const inFolder = c.folders.some(f => f.requests.some(x => x.id === r.id));
@@ -62,6 +58,10 @@ function syncReqIntoCols() {
       folders:  c.folders.map(f => ({ ...f, requests: f.requests.map(x => x.id === r.id ? r : x) })),
     };
   });
+}
+
+function syncAllTabsIntoCols() {
+  state.tabs.forEach(syncTabIntoCols);
 }
 
 // ─── Debounced disk save — fires after any change (button or keystroke) ───────
@@ -79,6 +79,16 @@ function uid() {
 
 function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
+}
+
+/** Default shape for Request.auth — covers all supported auth types */
+function defaultAuth() {
+  return {
+    type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '',
+    accessTokenUrl: '', clientId: '', clientSecret: '', scope: '',
+    cachedToken: '', cachedExpiry: 0,
+    jwtSecret: '', jwtPayload: '{"sub":"user123"}',
+  };
 }
 
 /** HTML-escape a value for safe innerHTML insertion */

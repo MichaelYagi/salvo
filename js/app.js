@@ -9,7 +9,7 @@ function normalizeReq(r) {
     params:  r.params  || [],
     headers: r.headers || [],
     body:    r.body || { type: 'none', raw: '', formData: [] },
-    auth:    r.auth || { type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '' },
+    auth:    { ...defaultAuth(), ...(r.auth || {}) },
   };
 }
 
@@ -84,6 +84,7 @@ async function init() {
   renderEnvSelect();
   renderSidebar();
   setupResizer();
+  showEmptyState();
   document.addEventListener('click', hideCtxMenu);
 
   document.addEventListener('keydown', e => {
@@ -95,7 +96,7 @@ async function init() {
 
   window.addEventListener('beforeunload', () => {
     clearTimeout(_diskSaveTimer);
-    syncReqIntoCols();
+    syncAllTabsIntoCols();
     const payload = JSON.stringify({ cols: state.cols, envs: state.envs, hist: state.hist });
     navigator.sendBeacon('/api/save', new Blob([payload], { type: 'application/json' }));
   });
@@ -141,8 +142,8 @@ function toggleHistPanel() {
     renderHistPanel();
   } else {
     document.getElementById('hist-panel').style.display = 'none';
-    if (state.req) showReqEditor();
-    else document.getElementById('empty-state').style.display = 'flex';
+    if (activeTab()) showReqEditor();
+    else showEmptyState();
   }
 }
 
@@ -183,8 +184,8 @@ function replayHistory(i) {
   const h = state.hist[i];
   if (!h) return;
 
-  // Populate a minimal request from history entry
-  state.req = {
+  // Populate a minimal scratch request from the history entry (not tied to any saved request)
+  const req = {
     id:      uid(),
     name:    h.url,
     method:  h.method,
@@ -192,15 +193,20 @@ function replayHistory(i) {
     headers: [],
     params:  [],
     body:    { type: 'none', raw: '', formData: [] },
-    auth:    { type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '' },
+    auth:    defaultAuth(),
   };
-  state.activeReqId = null;
-  state.resp        = null;
-  state.reqTab      = 'headers';
-  state.showHist    = false;
+
+  const tab = {
+    id: uid(), reqId: null, req, resp: null,
+    reqTab: 'headers', respTab: 'body', loading: false, abortCtrl: null,
+  };
+  state.tabs.push(tab);
+  state.activeTabId = tab.id;
+  state.showHist = false;
 
   document.getElementById('hist-panel').style.display  = 'none';
   document.getElementById('hist-toggle').textContent   = '⏱ History';
+  renderSidebar();
   showReqEditor();
 }
 

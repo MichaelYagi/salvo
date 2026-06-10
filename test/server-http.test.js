@@ -13,7 +13,7 @@ const http = require('http');
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'salvo-test-http-'));
 process.env.SALVO_DATA_DIR = DATA_DIR;
 
-const { server } = require('../server.js');
+const { server, parseDigestChallenge } = require('../server.js');
 
 let base;
 
@@ -171,6 +171,59 @@ test('POST /api/proxy supports formdata and urlencoded request bodies', async ()
     });
     assert.strictEqual((await urlencodedRes.json()).ok, true);
     assert.strictEqual(received[1].body, 'a=b');
+  } finally {
+    upstream.close();
+  }
+});
+
+test('POST /api/proxy transparently answers a Digest auth challenge', async () => {
+  const creds = { username: 'alice', password: 'secret' };
+  const realm = 'testrealm@host.com';
+  const nonce = 'dcd98b7102dd2f0e8b11d0f600bfb0c093';
+  const qop   = 'auth';
+
+  const upstream = http.createServer((req, res) => {
+    const auth = req.headers['authorization'];
+    if (!auth || !auth.startsWith('Digest')) {
+      res.writeHead(401, {
+        'WWW-Authenticate': `Digest realm="${realm}", nonce="${nonce}", qop="${qop}"`,
+      });
+      res.end();
+      return;
+    }
+
+    // Recompute the expected digest response using the cnonce/nc the client sent,
+    // since buildDigestHeader generates a fresh random cnonce each call.
+    const sent = parseDigestChallenge(auth);
+    const md5  = s => require('crypto').createHash('md5').update(s).digest('hex');
+    const ha1  = md5(`${creds.username}:${realm}:${creds.password}`);
+    const ha2  = md5(`GET:/`);
+    const expectedResponse = md5(`${ha1}:${nonce}:${sent.nc}:${sent.cnonce}:${qop}:${ha2}`);
+
+    if (sent.username === creds.username && sent.response === expectedResponse) {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('authenticated');
+    } else {
+      res.writeHead(401);
+      res.end();
+    }
+  });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = `http://127.0.0.1:${upstream.address().port}/`;
+
+  try {
+    const res = await fetch(`${base}/api/proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: upstreamUrl, method: 'GET', headers: {},
+        digestAuth: creds,
+      }),
+    });
+    const data = await res.json();
+    assert.strictEqual(data.ok, true);
+    assert.strictEqual(data.status, 200);
+    assert.strictEqual(Buffer.from(data.bodyBase64, 'base64').toString('utf8'), 'authenticated');
   } finally {
     upstream.close();
   }

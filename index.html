@@ -25,9 +25,9 @@
   <div id="topbar">
     <img src="img/favicon.svg" alt="" width="20" height="20" style="vertical-align:middle;border-radius:4px;margin-right:6px">
     <span class="logo">Salvo</span>
-    <span class="tb-div" style="display:none"></span>
-    <select id="env-select" style="display:none;width:150px;padding:3px 7px;font-size:12px"></select>
-    <button style="display:none" onclick="openEnvModal()">Manage Env</button>
+    <span class="tb-div">|</span>
+    <select id="env-select" style="width:150px;padding:3px 7px;font-size:12px" onchange="envQuickSwitch(this.value)"></select>
+    <button onclick="openEnvModal()">Manage Env</button>
     <div class="sep"></div>
     <span id="save-status" style="font-size:11px;color:#8b949e">All changes saved</span>
     <button onclick="exportAll()" title="Download all collections as a JSON file">Export</button>
@@ -63,6 +63,9 @@
     <!-- Main content area -->
     <div id="main">
 
+      <!-- Tab strip (hidden when no tabs are open) -->
+      <div id="tab-strip" style="display:none"></div>
+
       <!-- Empty state -->
       <div id="empty-state">
         <div class="icon">⬡</div>
@@ -86,7 +89,7 @@
           </select>
           <input id="url-input" type="text"
                  placeholder="https://api.example.com/endpoint {{var}}"
-                 oninput="state.req.url=this.value;scheduleAutoSave();renderReqPanel()"
+                 oninput="activeTab().req.url=this.value;scheduleAutoSave();renderReqPanel()"
                  onkeydown="if(event.key==='Enter')sendRequest()">
           <button id="send-btn" class="btn-primary" onclick="sendRequest()">Send</button>
         </div>
@@ -162,6 +165,7 @@
 
 <!-- ── JavaScript — load order matters ──────────────────────────────────── -->
 <script src="js/state.js"></script>       <!-- constants, state, storage, utils  -->
+<script src="js/tabs.js"></script>        <!-- tab strip: open/close/switch     -->
 <script src="js/sidebar.js"></script>     <!-- sidebar rendering & context menus -->
 <script src="js/curl.js"></script>        <!-- curl command generation            -->
 <script src="js/request.js"></script>     <!-- request editor panels             -->

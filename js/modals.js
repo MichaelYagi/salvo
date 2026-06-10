@@ -73,6 +73,9 @@ function renderEnvDetail() {
 
 // ─── Environment actions ──────────────────────────────────────────────────────
 
+// Switch the active environment directly from the topbar dropdown.
+function envQuickSwitch(id) { state.activeEnv = id; scheduleDiskSave(); }
+
 function envSelect(id)      { state.envSelId = id; renderEnvModal(); }
 function envRename(name)    { const e = getSelEnv(); if (e) { e.name = name; scheduleDiskSave(); } }
 function envSetVar(k, v)    { const e = getSelEnv(); if (e) { e.vars[k] = v; scheduleDiskSave(); } }

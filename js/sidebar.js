@@ -167,7 +167,7 @@ function folderHTML(colId, folder) {
 }
 
 function reqRowHTML(r, indent) {
-  const active   = state.activeReqId === r.id;
+  const active   = activeTab()?.reqId === r.id;
   const selected = state.selectedReqIds.has(r.id);
   const color    = MC[r.method] || '#c9d1d9';
 

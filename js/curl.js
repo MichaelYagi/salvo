@@ -1,7 +1,7 @@
 // ─── cURL Generator ───────────────────────────────────────────────────────────
 
 function buildCurl() {
-  const r = state.req;
+  const r = activeTab()?.req;
   if (!r || !r.url) return '';
 
   const parts = ['curl'];
@@ -31,6 +31,12 @@ function buildCurl() {
     parts.push(`-u '${auth.username}:${auth.password}'`);
   } else if (auth.type === 'apikey' && auth.apiKey) {
     parts.push(`-H '${auth.apiKey}: ${auth.apiValue}'`);
+  } else if ((auth.type === 'oauth2_cc' || auth.type === 'oauth2_pwd') && auth.cachedToken) {
+    parts.push(`-H 'Authorization: Bearer ${auth.cachedToken}'`);
+  } else if (auth.type === 'digest' && (auth.username || auth.password)) {
+    parts.push(`--digest -u '${auth.username}:${auth.password}'`);
+  } else if (auth.type === 'jwt' && auth.jwtSecret) {
+    parts.push(`-H 'Authorization: Bearer <JWT signed with HS256, computed at send time>'`);
   }
 
   // Headers

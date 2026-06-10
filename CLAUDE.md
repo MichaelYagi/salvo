@@ -39,14 +39,15 @@ All JS files share the **global browser scope** and are loaded as plain `<script
 
 | File | Owns |
 |------|------|
-| `js/state.js` | Global `state` object, `MC` method colours, `scheduleAutoSave()`, `uid()`, `clone()`, `esc()`, `interp()`, `notify()` |
+| `js/state.js` | Global `state` object, `MC` method colours, `defaultAuth()`, `scheduleAutoSave()`, `syncTabIntoCols()`/`syncAllTabsIntoCols()`, `uid()`, `clone()`, `esc()`, `interp()`, `notify()` |
+| `js/tabs.js` | `activeTab()`, `openTab()`, `closeTab()`, `switchTab()`, `renderTabStrip()` |
 | `js/sidebar.js` | `renderSidebar()`, collection/folder/request HTML generation, `toggleCol()`, `toggleFolder()`, `showCtxMenu()`, `hideCtxMenu()`, `colCtx()`, `reqCtx()` |
 | `js/curl.js` | `buildCurl()`, `curlPanelHTML()`, `copyCurl()` |
-| `js/request.js` | `showReqEditor()`, `syncReqEditor()`, `renderReqPanel()`, `switchReqTab()`, `updateTabBadges()`, `kvEditorHTML()`, `kvToggle/Set/Del/Add()`, `authHTML()`, `authTypeChange/Set()`, `bodyHTML()`, `bodyTypeChange/Set()`, `onMethodChange()`, `onReqNameChange()` |
+| `js/request.js` | `showReqEditor()`, `showEmptyState()`, `syncReqEditor()`, `renderReqPanel()`, `switchReqTab()`, `updateTabBadges()`, `kvEditorHTML()`, `kvToggle/Set/Del/Add()`, `authHTML()`, `authTypeChange/Set()`, `bodyHTML()`, `bodyTypeChange/Set()`, `onMethodChange()`, `onReqNameChange()` |
 | `js/response.js` | `renderRespPanel()`, `switchRespTab()`, `copyResponse()`, `buildJsonTree()` |
-| `js/send.js` | `sendRequest()`, `cancelReq()`, `buildRequestArgs()`, `parseResponse()` |
+| `js/send.js` | `sendRequest()`, `cancelReq()`, `buildRequestArgs()`, `parseResponse()`, `ensureOAuthToken()`/`fetchOAuthToken()`/`manualFetchOAuthToken()`, `buildJwt()` |
 | `js/collections.js` | `findReq()`, `selectReq()`, `addCollection/Folder/Req()`, `deleteCol/Req()`, `dupReq()`, `renameCol()`, `exportCol()`, `importFile()`, `parsePostman()` |
-| `js/modals.js` | `openEnvModal()`, `closeEnvModal()`, `renderEnvSelect()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()`, `envSelect/Rename/SetVar/DelVar/AddVar/Use/Delete()`, `addEnv()`, `getSelEnv()` |
+| `js/modals.js` | `openEnvModal()`, `closeEnvModal()`, `renderEnvSelect()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()`, `envSelect/Rename/SetVar/DelVar/AddVar/Use/Delete()`, `envQuickSwitch()`, `addEnv()`, `getSelEnv()` |
 | `js/app.js` | `init()`, `loadData()`, `saveAll()`, `setupResizer()`, `toggleHistPanel()`, `renderHistPanel()`, `replayHistory()`, `clearHistory()` |
 
 > **Note:** `css/curl.js` is a stray file — it is not loaded by `index.html` and should be ignored. The active curl code is `js/curl.js`.
@@ -72,21 +73,38 @@ state = {
 
   // runtime only
   activeEnv:       'default',
-  activeReqId:     null,
-  req:             null,   // working copy — auto-saved back to cols after 500ms
-  resp:            null,
-  reqTab:          'params', // 'params' | 'headers' | 'auth' | 'body' | 'curl'
-  respTab:         'body',   // 'body' | 'headers'
-  loading:         false,
+  tabs:            [],   // array of Tab objects (browser-style request tabs), see below
+  activeTabId:     null, // id of the focused tab, or null when state.tabs is empty
+  reqTabByReqId:   Map,  // reqId -> last-used reqTab ('params'|'headers'|...), used when (re)opening a request
   expandedCols:    Set,
   expandedFolders: Set,
   showHist:        false,
   envSelId:        'default',
-  abortCtrl:       null,
   selectedReqIds:  Set,
   lastSelReqId:    null,
 }
 ```
+
+### Tab shape
+
+```js
+{
+  id:        String,
+  reqId:     String | null,  // null for scratch tabs (e.g. history replay) — never persisted to cols
+  req:       Request,        // working copy — auto-saved back to cols after 500ms via syncTabIntoCols()
+  resp:      Object | null,
+  reqTab:    'params' | 'headers' | 'auth' | 'body' | 'curl',
+  respTab:   'body' | 'headers',
+  loading:   Boolean,
+  abortCtrl: AbortController | null,
+}
+```
+
+The app starts with zero tabs (`#empty-state` shown). `openTab(reqId)` opens a
+request in a new tab or focuses its existing tab. `activeTab()` returns
+`state.tabs.find(t => t.id === state.activeTabId) || null` and is the
+single accessor used everywhere in place of the old singular `state.req`/
+`state.resp`/etc. fields. Closing the last tab returns to the empty state.
 
 ### Collection shape
 
@@ -116,13 +134,21 @@ state = {
     formData: [{ id, key, value, enabled }],
   },
   auth: {
-    type: 'none' | 'bearer' | 'basic' | 'apikey',
+    type: 'none' | 'bearer' | 'basic' | 'apikey' | 'oauth2_cc' | 'oauth2_pwd' | 'digest' | 'jwt',
     token: String,
     username: String, password: String,
     apiKey: String, apiValue: String,
+    accessTokenUrl: String, clientId: String, clientSecret: String, scope: String,
+    cachedToken: String, cachedExpiry: Number,  // OAuth2 token cache (ms epoch)
+    jwtSecret: String, jwtPayload: String,      // JWT Bearer (HS256) — payload is a JSON string
   },
 }
 ```
+
+`defaultAuth()` (in `js/state.js`) is the single source of truth for this
+shape — `normalizeReq`, `newRequestTemplate`, `parsePostman`, and
+`replayHistory` all build on it (`{ ...defaultAuth(), ...savedAuth }`) so
+older saved requests get the new fields with sane defaults.
 
 ## Key conventions
 
@@ -132,11 +158,11 @@ state = {
 
 **`interp(s)`** — replaces `{{var}}` placeholders with values from the active environment. Call this in `send.js` when building the actual fetch request, not when storing/displaying.
 
-**`scheduleAutoSave()`** — debounces (500ms) writing `state.req` back into `state.cols` via `syncReqIntoCols()`, then calls `scheduleDiskSave()`. Call it from any function that mutates `state.req`.
+**`scheduleAutoSave()`** — captures `activeTab()` at call time, then debounces (500ms) writing that tab's `req` back into `state.cols` via `syncTabIntoCols()`, then calls `scheduleDiskSave()`. Capturing the tab up front (rather than inside the timeout) means switching tabs during the 500ms window doesn't sync edits into the wrong request. Call it from any function that mutates `activeTab().req`. Scratch tabs (`reqId === null`, e.g. history replay) are never synced.
 
 **`scheduleDiskSave()`** — debounces (800ms) a silent `saveAll(true)` call, which `POST`s `{ cols, envs, hist }` to `/api/save`. Call it after any state-mutating action (collection/folder/request CRUD, env edits, history changes) so changes persist to disk automatically. Errors still surface via a "Save failed" toast; silent saves don't show a "Saved" toast.
 
-**Saving to disk** — `Ctrl+S`/`Cmd+S` (handled in `init()` in `app.js`) still works and calls `saveAll()` (non-silent, shows a "Saved" toast) for an explicit manual save. On `beforeunload`, `init()` also flushes any pending edits via `syncReqIntoCols()` and writes to disk with `navigator.sendBeacon('/api/save', ...)` so closing the tab doesn't lose in-flight changes.
+**Saving to disk** — `Ctrl+S`/`Cmd+S` (handled in `init()` in `app.js`) still works and calls `saveAll()` (non-silent, shows a "Saved" toast) for an explicit manual save. On `beforeunload`, `init()` also flushes any pending edits via `syncAllTabsIntoCols()` and writes to disk with `navigator.sendBeacon('/api/save', ...)` so closing the tab doesn't lose in-flight changes.
 
 **Tab rendering** — `renderReqPanel()` is the single dispatcher for the request editor panel. Adding a new tab means: adding a button to `#req-tabbar` in `index.html`, adding a case in the `switch` in `renderReqPanel()`, and implementing the HTML-returning function.
 
@@ -144,6 +170,7 @@ state = {
 
 - **No module system** — all functions are global. Name collisions will cause silent bugs. Keep function names specific (e.g. `renderEnvList` not `renderList`).
 - **`Set` objects in state** (`expandedCols`, `expandedFolders`) are runtime-only — they don't serialise to JSON, so they're not persisted and are always initialised fresh.
-- **Working copy pattern** — `state.req` is a `clone()` of the selected request. Edits go there first, then auto-save writes it back to `state.cols`. Always use `clone()` when copying a request object to avoid shared references.
+- **Working copy pattern** — each tab's `req` is a `clone()` of the selected request. Edits go there first, then auto-save writes it back to `state.cols`. Always use `clone()` when copying a request object to avoid shared references.
+- **Multi-tab editing** — `state.tabs` holds one entry per open request; `activeTab()` is the single accessor for "the currently focused tab" and replaces all former singular `state.req`/`resp`/`reqTab`/`respTab`/`loading`/`abortCtrl`/`activeReqId` fields. `openTab`/`closeTab`/`switchTab`/`renderTabStrip` live in `js/tabs.js`. With zero tabs, `showEmptyState()` is shown instead of `showReqEditor()`.
 - **innerHTML vs DOM** — use `innerHTML` for rendering panels and sidebar rows (strings are `esc()`'d). Use DOM methods (`createElement`, `appendChild`) when rendering untrusted content like API response bodies (`buildJsonTree`).
 - **Auto-saves to disk** — any state-mutating action triggers a debounced (800ms) write to `data/` via `/api/save`, and `beforeunload` flushes pending changes via `sendBeacon`. Ctrl+S still works for an explicit save with a "Saved" toast.

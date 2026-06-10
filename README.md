@@ -7,8 +7,10 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 ## Features
 
 - **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format.
-- **Full request editing** — method, URL, query params, headers, auth (Bearer, Basic, API Key), and body (raw JSON/XML/text, form-data, x-www-form-urlencoded)
-- **Environment variables** — `{{variable}}` placeholders are resolved from the active environment when sending. (The environment switcher/editor UI is currently hidden in the topbar, but the underlying data and `data/_salvo/envs.json` still work.)
+- **Multi-tab editing** — open several requests at once in browser-style tabs above the editor; each tab keeps its own edits, response, and active sub-tab.
+- **Full request editing** — method, URL, query params, headers, auth, and body (raw JSON/XML/text, form-data, x-www-form-urlencoded)
+- **Auth** — Bearer Token, Basic Auth, API Key, OAuth 2.0 (Client Credentials & Password Grant), Digest Auth, and JWT Bearer (HS256)
+- **Environment variables** — `{{variable}}` placeholders are resolved from the active environment when sending. Switch environments from the topbar dropdown, or manage them via "Manage Env".
 - **Response viewer** — status, timing, size, collapsible JSON tree, raw body, response headers. Large JSON responses (>1MB) fall back to raw text to avoid freezing the tab.
 - **cURL tab** — live curl equivalent for every request, updates as you type, one-click copy
 - **Notes on params/headers** — annotate individual rows ("Dev key", "pagination cursor", etc.)
@@ -82,10 +84,42 @@ All JS files share the global scope and load in order. `state.js` must be first 
   "auth": {
     "type": "bearer",
     "token": "{{token}}",
-    "username": "", "password": "", "apiKey": "", "apiValue": ""
+    "username": "", "password": "", "apiKey": "", "apiValue": "",
+    "accessTokenUrl": "", "clientId": "", "clientSecret": "", "scope": "",
+    "cachedToken": "", "cachedExpiry": 0,
+    "jwtSecret": "", "jwtPayload": "{\"sub\":\"user123\"}"
   }
 }
 ```
+
+## Environment variables
+
+Use `{{variable}}` placeholders anywhere in a request's URL, params, headers, or body — they're resolved against the **active environment** when the request is sent.
+
+1. Click **Manage Env** in the topbar to open the environment editor.
+2. Add a variable, e.g. `baseUrl` = `https://api.example.com` and `token` = `your-dev-token`.
+3. Pick that environment from the dropdown next to **Manage Env**.
+4. In a request, set the URL to `{{baseUrl}}/users/{{userId}}` and add a header `Authorization: Bearer {{token}}`.
+
+`{{userId}}` would come from another environment variable, or you can leave params un-interpolated for ones you fill in per-request. Switching environments from the topbar dropdown instantly changes what every `{{...}}` placeholder resolves to — handy for flipping between dev/staging/prod without editing requests.
+
+## Auth types
+
+Configure auth on the **Auth** tab of a request. Salvo supports:
+
+- **Bearer Token** — sets `Authorization: Bearer <token>`. Token field supports `{{variables}}`.
+- **Basic Auth** — sets `Authorization: Basic <base64(username:password)>`.
+- **API Key** — adds a custom header (or query param) with a key/value you choose.
+- **OAuth 2.0 — Client Credentials** — set **Access Token URL**, **Client ID**, **Client Secret**, and optionally **Scope**. Click **Get Access Token** to fetch and cache a token, or just hit Send — Salvo fetches one automatically if none is cached (or the cached one has expired).
+- **OAuth 2.0 — Password Grant** — same as above, plus **Username**/**Password**, sent with `grant_type=password`.
+- **Digest Auth** — set **Username**/**Password**. Salvo sends the request, and if the server responds with a `WWW-Authenticate: Digest` challenge, transparently retries with the computed digest response — no manual nonce handling needed.
+- **JWT Bearer (HS256)** — set a **Secret** and a JSON **payload** (e.g. `{"sub":"user123"}`). Salvo signs a fresh HS256 JWT at send time, adding `iat`/`exp` (1 hour) automatically if you don't specify them, and sends it as `Authorization: Bearer <jwt>`.
+
+For OAuth2, the fetched token is cached on the request (`cachedToken`/`cachedExpiry`) and reused until it expires.
+
+## Tabs
+
+Opening a request from the sidebar opens it in a new tab (or focuses its existing tab if already open). Each tab keeps its own unsaved edits, response, and active sub-tab (Params/Headers/Auth/Body/cURL), so you can work on multiple requests side by side. Close a tab with its `×` button; closing the last tab returns to the "Select or create a request" empty state.
 
 ## Export / Import
 

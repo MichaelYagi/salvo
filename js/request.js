@@ -6,11 +6,21 @@ function showReqEditor() {
   document.getElementById('req-editor').style.display  = 'flex';
   state.showHist = false;
   document.getElementById('hist-toggle').textContent   = '⏱ History';
+  renderTabStrip();
   syncReqEditor();
 }
 
+function showEmptyState() {
+  document.getElementById('req-editor').style.display  = 'none';
+  document.getElementById('hist-panel').style.display  = 'none';
+  document.getElementById('empty-state').style.display = 'flex';
+  renderTabStrip();
+}
+
 function syncReqEditor() {
-  const r  = state.req;
+  const tab = activeTab();
+  if (!tab) return;
+  const r  = tab.req;
   const ms = document.getElementById('method-select');
   ms.value       = r.method;
   ms.style.color = MC[r.method] || '#c9d1d9';
@@ -24,39 +34,45 @@ function syncReqEditor() {
 // ─── Method / name change handlers (called from inline HTML events) ───────────
 
 function onMethodChange() {
+  const tab = activeTab();
   const v = document.getElementById('method-select').value;
   document.getElementById('method-select').style.color = MC[v] || '#c9d1d9';
-  state.req.method = v;
+  tab.req.method = v;
   scheduleAutoSave();
-  if (state.reqTab === 'curl') renderReqPanel();
+  renderTabStrip();
+  if (tab.reqTab === 'curl') renderReqPanel();
 }
 
 function onReqNameChange(v) {
-  state.req.name = v;
+  activeTab().req.name = v;
   scheduleAutoSave();
+  renderTabStrip();
 }
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
 
 function updateTabBadges() {
-  if (!state.req) return;
-  const pCount = state.req.params.filter(p => p.enabled && p.key).length;
-  const hCount = state.req.headers.filter(h => h.enabled && h.key).length;
+  const tab = activeTab();
+  if (!tab) return;
+  const pCount = tab.req.params.filter(p => p.enabled && p.key).length;
+  const hCount = tab.req.headers.filter(h => h.enabled && h.key).length;
 
-  document.querySelectorAll('#req-tabbar .tab').forEach(tab => {
-    const name = tab.dataset.tab;
-    tab.classList.toggle('active', name === state.reqTab);
+  document.querySelectorAll('#req-tabbar .tab').forEach(t => {
+    const name = t.dataset.tab;
+    t.classList.toggle('active', name === tab.reqTab);
 
     let label = name.charAt(0).toUpperCase() + name.slice(1);
     if (name === 'params'  && pCount > 0) label += `<span class="tab-badge">${pCount}</span>`;
     if (name === 'headers' && hCount > 0) label += `<span class="tab-badge">${hCount}</span>`;
-    tab.innerHTML = label;
+    t.innerHTML = label;
   });
 }
 
-function switchReqTab(tab) {
-  state.reqTab = tab;
-  if (state.activeReqId) state.reqTabByReqId.set(state.activeReqId, tab);
+function switchReqTab(tabName) {
+  const tab = activeTab();
+  if (!tab) return;
+  tab.reqTab = tabName;
+  if (tab.reqId) state.reqTabByReqId.set(tab.reqId, tabName);
   updateTabBadges();
   renderReqPanel();
 }
@@ -64,15 +80,16 @@ function switchReqTab(tab) {
 // ─── Request panel dispatcher ─────────────────────────────────────────────────
 
 function renderReqPanel() {
-  const el = document.getElementById('req-panel');
-  if (!state.req) return;
+  const el  = document.getElementById('req-panel');
+  const tab = activeTab();
+  if (!tab) return;
 
-  switch (state.reqTab) {
-    case 'params':  el.innerHTML = kvEditorHTML(state.req.params,  'params');  break;
-    case 'headers': el.innerHTML = kvEditorHTML(state.req.headers, 'headers'); break;
-    case 'auth':    el.innerHTML = authHTML(state.req.auth);                   break;
-    case 'body':    el.innerHTML = bodyHTML(state.req.body);                   break;
-    case 'curl':    el.innerHTML = curlPanelHTML();                            break;
+  switch (tab.reqTab) {
+    case 'params':  el.innerHTML = kvEditorHTML(tab.req.params,  'params');  break;
+    case 'headers': el.innerHTML = kvEditorHTML(tab.req.headers, 'headers'); break;
+    case 'auth':    el.innerHTML = authHTML(tab.req.auth);                   break;
+    case 'body':    el.innerHTML = bodyHTML(tab.req.body);                   break;
+    case 'curl':    el.innerHTML = curlPanelHTML();                          break;
   }
 }
 
@@ -144,7 +161,7 @@ function getHeaderSuggestions(headerName) {
 
 // `field` is 'key' (header name) or 'value' (header value).
 function showHeaderSuggest(i, field) {
-  const row = state.req.headers[i];
+  const row = activeTab().req.headers[i];
   const all = field === 'key' ? HEADER_NAME_SUGGESTIONS : getHeaderSuggestions(row.key);
   hideHeaderSuggest();
   if (!all) return;
@@ -187,10 +204,11 @@ function hideHeaderSuggest() {
 }
 
 function acceptHeaderSuggest(i, field, value) {
-  state.req.headers[i][field] = value;
+  const tab = activeTab();
+  tab.req.headers[i][field] = value;
   scheduleAutoSave();
   updateTabBadges();
-  if (state.reqTab === 'curl') renderReqPanel();
+  if (tab.reqTab === 'curl') renderReqPanel();
 
   const input = document.getElementById(`kv-${field}-headers-${i}`);
   if (input) {
@@ -278,26 +296,33 @@ function kvEditorHTML(rows, key) {
 }
 
 function getKvTarget(key) {
-  if (key === 'params')   return state.req.params;
-  if (key === 'headers')  return state.req.headers;
-  if (key === 'formData') return state.req.body.formData;
+  const r = activeTab().req;
+  if (key === 'params')   return r.params;
+  if (key === 'headers')  return r.headers;
+  if (key === 'formData') return r.body.formData;
 }
 
-function kvToggle(key, i, v)        { getKvTarget(key)[i].enabled   = v; scheduleAutoSave(); updateTabBadges(); if (state.reqTab === 'curl') renderReqPanel(); }
-function kvSet(key, i, field, v)    { getKvTarget(key)[i][field]     = v; scheduleAutoSave(); updateTabBadges(); if (state.reqTab === 'curl') renderReqPanel(); }
+function kvToggle(key, i, v)        { getKvTarget(key)[i].enabled   = v; scheduleAutoSave(); updateTabBadges(); if (activeTab().reqTab === 'curl') renderReqPanel(); }
+function kvSet(key, i, field, v)    { getKvTarget(key)[i][field]     = v; scheduleAutoSave(); updateTabBadges(); if (activeTab().reqTab === 'curl') renderReqPanel(); }
 function kvDel(key, i)              { getKvTarget(key).splice(i, 1);     scheduleAutoSave(); updateTabBadges(); renderReqPanel(); }
 function kvAdd(key)                 { getKvTarget(key).push({ id: uid(), key: '', value: '', enabled: true }); scheduleAutoSave(); renderReqPanel(); }
 
 // ─── Auth Editor ──────────────────────────────────────────────────────────────
 
+const AUTH_LABEL_STYLE = 'display:block;color:#8b949e;font-size:11px;margin-bottom:4px';
+
 function authHTML(a) {
   let html = `
     <div class="auth-row">
       <select onchange="authTypeChange(this.value)">
-        <option value="none"   ${a.type === 'none'   ? 'selected' : ''}>No Auth</option>
-        <option value="bearer" ${a.type === 'bearer' ? 'selected' : ''}>Bearer Token</option>
-        <option value="basic"  ${a.type === 'basic'  ? 'selected' : ''}>Basic Auth</option>
-        <option value="apikey" ${a.type === 'apikey' ? 'selected' : ''}>API Key</option>
+        <option value="none"      ${a.type === 'none'      ? 'selected' : ''}>No Auth</option>
+        <option value="bearer"    ${a.type === 'bearer'    ? 'selected' : ''}>Bearer Token</option>
+        <option value="basic"     ${a.type === 'basic'     ? 'selected' : ''}>Basic Auth</option>
+        <option value="apikey"    ${a.type === 'apikey'    ? 'selected' : ''}>API Key</option>
+        <option value="oauth2_cc" ${a.type === 'oauth2_cc' ? 'selected' : ''}>OAuth 2.0 - Client Credentials</option>
+        <option value="oauth2_pwd" ${a.type === 'oauth2_pwd' ? 'selected' : ''}>OAuth 2.0 - Password Grant</option>
+        <option value="digest"    ${a.type === 'digest'    ? 'selected' : ''}>Digest Auth</option>
+        <option value="jwt"       ${a.type === 'jwt'       ? 'selected' : ''}>JWT Bearer (HS256)</option>
       </select>
     </div>`;
 
@@ -338,6 +363,75 @@ function authHTML(a) {
       </div>`;
   }
 
+  if (a.type === 'oauth2_cc' || a.type === 'oauth2_pwd') {
+    html += `
+      <label style="${AUTH_LABEL_STYLE}">Access Token URL</label>
+      <input value="${esc(a.accessTokenUrl)}" oninput="authSet('accessTokenUrl',this.value)"
+             placeholder="https://auth.example.com/oauth/token" style="width:100%;font-family:monospace;margin-bottom:8px">
+      <div class="two-col">
+        <div>
+          <label style="${AUTH_LABEL_STYLE}">Client ID</label>
+          <input value="${esc(a.clientId)}" oninput="authSet('clientId',this.value)" style="width:100%">
+        </div>
+        <div>
+          <label style="${AUTH_LABEL_STYLE}">Client Secret</label>
+          <input type="password" value="${esc(a.clientSecret)}" oninput="authSet('clientSecret',this.value)" style="width:100%">
+        </div>
+      </div>`;
+
+    if (a.type === 'oauth2_pwd') {
+      html += `
+      <div class="two-col">
+        <div>
+          <label style="${AUTH_LABEL_STYLE}">Username</label>
+          <input value="${esc(a.username)}" oninput="authSet('username',this.value)" style="width:100%">
+        </div>
+        <div>
+          <label style="${AUTH_LABEL_STYLE}">Password</label>
+          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value)" style="width:100%">
+        </div>
+      </div>`;
+    }
+
+    html += `
+      <label style="${AUTH_LABEL_STYLE}">Scope (optional)</label>
+      <input value="${esc(a.scope)}" oninput="authSet('scope',this.value)" style="width:100%;font-family:monospace;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <button class="btn-primary" onclick="manualFetchOAuthToken()">Get Access Token</button>
+        <span style="font-size:11px;color:#8b949e">${
+          a.cachedToken
+            ? `Token cached, expires ${new Date(a.cachedExpiry).toLocaleTimeString()}`
+            : 'No token yet — fetched automatically on Send'
+        }</span>
+      </div>`;
+  }
+
+  if (a.type === 'digest') {
+    html += `
+      <div class="two-col">
+        <div>
+          <label style="${AUTH_LABEL_STYLE}">Username</label>
+          <input value="${esc(a.username)}" oninput="authSet('username',this.value)" style="width:100%">
+        </div>
+        <div>
+          <label style="${AUTH_LABEL_STYLE}">Password</label>
+          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value)" style="width:100%">
+        </div>
+      </div>
+      <p class="muted">Salvo automatically responds to the server's digest challenge.</p>`;
+  }
+
+  if (a.type === 'jwt') {
+    html += `
+      <label style="${AUTH_LABEL_STYLE}">Secret (HS256)</label>
+      <input type="password" value="${esc(a.jwtSecret)}" oninput="authSet('jwtSecret',this.value)"
+             style="width:100%;font-family:monospace;margin-bottom:8px">
+      <label style="${AUTH_LABEL_STYLE}">Payload (JSON claims)</label>
+      <textarea oninput="authSet('jwtPayload',this.value)"
+                style="width:100%;min-height:100px;font-family:monospace;font-size:12px">${esc(a.jwtPayload)}</textarea>
+      <p class="muted"><code>iat</code> and <code>exp</code> (1 hour) are added automatically if not present.</p>`;
+  }
+
   if (a.type === 'none') {
     html += `<p class="muted">No authentication will be sent.</p>`;
   }
@@ -345,8 +439,8 @@ function authHTML(a) {
   return html;
 }
 
-function authTypeChange(v) { state.req.auth.type = v; scheduleAutoSave(); renderReqPanel(); }
-function authSet(field, v) { state.req.auth[field] = v; scheduleAutoSave(); }
+function authTypeChange(v) { activeTab().req.auth.type = v; scheduleAutoSave(); renderReqPanel(); }
+function authSet(field, v) { activeTab().req.auth[field] = v; scheduleAutoSave(); }
 
 // ─── Body Editor ──────────────────────────────────────────────────────────────
 
@@ -386,5 +480,5 @@ function bodyHTML(b) {
   return html;
 }
 
-function bodyTypeChange(t) { state.req.body.type = t; scheduleAutoSave(); renderReqPanel(); }
-function bodySet(field, v) { state.req.body[field] = v; scheduleAutoSave(); }
+function bodyTypeChange(t) { activeTab().req.body.type = t; scheduleAutoSave(); renderReqPanel(); }
+function bodySet(field, v) { activeTab().req.body[field] = v; scheduleAutoSave(); }

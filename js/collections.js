@@ -9,14 +9,7 @@ function findReq(id) {
 }
 
 function selectReq(id) {
-  const r = findReq(id);
-  if (!r) return;
-  state.activeReqId = id;
-  state.req         = clone(r);
-  state.resp        = null;
-  state.reqTab      = state.reqTabByReqId.get(id) || 'headers';
-  renderSidebar();
-  showReqEditor();
+  openTab(id);
 }
 
 // ─── Collection CRUD ──────────────────────────────────────────────────────────
@@ -146,7 +139,7 @@ function newRequestTemplate() {
     headers: [],
     params:  [],
     body:    { type: 'none', raw: '', formData: [] },
-    auth:    { type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '' },
+    auth:    defaultAuth(),
   };
 }
 
@@ -177,10 +170,14 @@ function renameReq(id) {
   const name = prompt('Rename request:', r.name);
   if (name === null) return;
   r.name = name;
-  if (state.req && state.req.id === id) {
-    state.req.name = name;
-    document.getElementById('req-name-input').value = name;
+
+  const tab = state.tabs.find(t => t.reqId === id);
+  if (tab) {
+    tab.req.name = name;
+    if (activeTab() === tab) document.getElementById('req-name-input').value = name;
+    renderTabStrip();
   }
+
   renderSidebar();
   scheduleDiskSave();
 }
@@ -244,16 +241,15 @@ function deleteReqs(ids) {
     folders:  c.folders.map(f => ({ ...f, requests: f.requests.filter(r => !idSet.has(r.id)) })),
   }));
 
-  if (idSet.has(state.activeReqId)) {
-    state.activeReqId = null;
-    state.req         = null;
-    state.resp        = null;
-    document.getElementById('req-editor').style.display  = 'none';
-    document.getElementById('empty-state').style.display = 'flex';
+  state.tabs = state.tabs.filter(t => !idSet.has(t.reqId));
+  if (state.activeTabId && !state.tabs.some(t => t.id === state.activeTabId)) {
+    state.activeTabId = state.tabs[0]?.id || null;
   }
 
   state.selectedReqIds = new Set();
   renderSidebar();
+  if (activeTab()) showReqEditor();
+  else showEmptyState();
   scheduleDiskSave();
 }
 
@@ -399,7 +395,7 @@ function parsePostman(data) {
       }
     }
 
-    const auth = { type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '' };
+    const auth = defaultAuth();
     if (r.auth?.type === 'bearer') {
       auth.type  = 'bearer';
       auth.token = r.auth.bearer?.find(b => b.key === 'token')?.value || '';

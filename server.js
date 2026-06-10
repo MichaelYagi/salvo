@@ -4,9 +4,10 @@
 // Salvo dev server — static file serving + a tiny JSON file API for the
 // data/ directory (collections, environments, history). No dependencies.
 
-const http = require('http');
-const fs   = require('fs');
-const path = require('path');
+const http   = require('http');
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
 
 const ROOT      = __dirname;
 const DATA_DIR  = process.env.SALVO_DATA_DIR || path.join(ROOT, 'data');
@@ -33,6 +34,32 @@ function uniqueName(base, used) {
   while (used.has(name.toLowerCase())) name = `${base} (${i++})`;
   used.add(name.toLowerCase());
   return name;
+}
+
+// ─── Digest auth (RFC 2617) ─────────────────────────────────────────────────────
+
+function parseDigestChallenge(header) {
+  const out = {};
+  const re = /(\w+)=(?:"([^"]*)"|([^,\s]+))/g;
+  let m;
+  while ((m = re.exec(header))) out[m[1]] = m[2] !== undefined ? m[2] : m[3];
+  return out;
+}
+
+function buildDigestHeader({ username, password }, method, uri, { realm, nonce, qop, opaque, algorithm }) {
+  const md5 = s => crypto.createHash('md5').update(s).digest('hex');
+  const ha1 = md5(`${username}:${realm}:${password}`);
+  const ha2 = md5(`${method}:${uri}`);
+
+  const nc     = '00000001';
+  const cnonce = crypto.randomBytes(8).toString('hex');
+  const response = qop ? md5(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`) : md5(`${ha1}:${nonce}:${ha2}`);
+
+  let h = `Digest username="${username}", realm="${realm}", nonce="${nonce}", uri="${uri}", response="${response}"`;
+  if (qop)       h += `, qop=${qop}, nc=${nc}, cnonce="${cnonce}"`;
+  if (opaque)    h += `, opaque="${opaque}"`;
+  if (algorithm) h += `, algorithm=${algorithm}`;
+  return h;
 }
 
 // ─── Build {cols, envs, hist} from a flat list of {path, content} files ───────
@@ -178,24 +205,42 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
-        const { url, method, headers, body: reqBody, bodyKind } = JSON.parse(body);
+        const { url, method, headers, body: reqBody, bodyKind, digestAuth } = JSON.parse(body);
 
-        let fetchBody;
-        if (bodyKind === 'raw') {
-          fetchBody = reqBody;
-        } else if (bodyKind === 'formdata') {
-          fetchBody = new FormData();
-          (reqBody || []).forEach(({ key, value }) => fetchBody.append(key, value));
-        } else if (bodyKind === 'urlencoded') {
-          fetchBody = new URLSearchParams((reqBody || []).map(({ key, value }) => [key, value]));
+        function buildFetchBody() {
+          if (bodyKind === 'raw') return reqBody;
+          if (bodyKind === 'formdata') {
+            const fd = new FormData();
+            (reqBody || []).forEach(({ key, value }) => fd.append(key, value));
+            return fd;
+          }
+          if (bodyKind === 'urlencoded') {
+            return new URLSearchParams((reqBody || []).map(({ key, value }) => [key, value]));
+          }
+          return undefined;
         }
 
-        const start    = Date.now();
-        const upstream = await fetch(url, {
+        const doFetch = hdrs => fetch(url, {
           method,
-          headers,
-          body: ['GET', 'HEAD'].includes(method) ? undefined : fetchBody,
+          headers: hdrs,
+          body: ['GET', 'HEAD'].includes(method) ? undefined : buildFetchBody(),
         });
+
+        const start = Date.now();
+        let upstream = await doFetch(headers);
+
+        // Transparently answer a Digest auth challenge and retry once.
+        if (digestAuth && upstream.status === 401) {
+          const challengeHeader = upstream.headers.get('www-authenticate') || '';
+          if (/digest/i.test(challengeHeader)) {
+            const challenge   = parseDigestChallenge(challengeHeader);
+            const reqUrl      = new URL(url);
+            const uri         = reqUrl.pathname + reqUrl.search;
+            const digestValue = buildDigestHeader(digestAuth, method, uri, challenge);
+            upstream = await doFetch({ ...headers, Authorization: digestValue });
+          }
+        }
+
         const elapsed = Date.now() - start;
 
         const buf         = Buffer.from(await upstream.arrayBuffer());
@@ -237,4 +282,7 @@ if (require.main === module) {
   server.listen(PORT, () => console.log(`Salvo running at http://localhost:${PORT}`));
 }
 
-module.exports = { sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server };
+module.exports = {
+  sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server,
+  parseDigestChallenge, buildDigestHeader,
+};

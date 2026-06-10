@@ -1,9 +1,11 @@
 // ─── Response Panel ───────────────────────────────────────────────────────────
 
-function switchRespTab(tab) {
-  state.respTab = tab;
+function switchRespTab(tabName) {
+  const tab = activeTab();
+  if (!tab) return;
+  tab.respTab = tabName;
   document.querySelectorAll('[data-rtab]').forEach(t =>
-    t.classList.toggle('active', t.dataset.rtab === tab)
+    t.classList.toggle('active', t.dataset.rtab === tabName)
   );
   renderRespPanel();
 }
@@ -14,7 +16,8 @@ function renderRespPanel() {
   const timeEl  = document.getElementById('resp-time');
   const sizeEl  = document.getElementById('resp-size');
   const copyBtn = document.getElementById('copy-resp-btn');
-  const resp    = state.resp;
+  const tab     = activeTab();
+  const resp    = tab?.resp;
 
   // Nothing sent yet
   if (!resp) {
@@ -56,7 +59,7 @@ function renderRespPanel() {
   }
 
   // Body tab
-  if (state.respTab === 'body') {
+  if (tab.respTab === 'body') {
     copyBtn.style.display = '';
 
     if (resp.bodyType === 'image') {
@@ -101,8 +104,9 @@ function renderRespPanel() {
 }
 
 function copyResponse() {
-  if (state.resp?.body) {
-    navigator.clipboard.writeText(state.resp.body).then(() => notify('Copied', 'success'));
+  const resp = activeTab()?.resp;
+  if (resp?.body) {
+    navigator.clipboard.writeText(resp.body).then(() => notify('Copied', 'success'));
   }
 }
 

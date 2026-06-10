@@ -14,7 +14,7 @@ const path = require('path');
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'salvo-test-'));
 process.env.SALVO_DATA_DIR = DATA_DIR;
 
-const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData } = require('../server.js');
+const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, parseDigestChallenge, buildDigestHeader } = require('../server.js');
 
 function resetData() {
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
@@ -120,6 +120,35 @@ test('saveData wipes a collection\'s old request files when a request is renamed
 
   assert.ok(!fs.existsSync(path.join(DATA_DIR, 'A', 'Old Name.json')), 'stale request file should be removed');
   assert.ok(fs.existsSync(path.join(DATA_DIR, 'A', 'New Name.json')));
+});
+
+test('parseDigestChallenge parses quoted and unquoted directives', () => {
+  const out = parseDigestChallenge('Digest realm="testrealm@host.com", qop="auth", nonce="abc123", opaque="xyz", algorithm=MD5');
+  assert.deepStrictEqual(out, { realm: 'testrealm@host.com', qop: 'auth', nonce: 'abc123', opaque: 'xyz', algorithm: 'MD5' });
+});
+
+test('buildDigestHeader computes a response matching RFC 2617\'s worked example', () => {
+  // RFC 2617 §3.5 example vectors (algorithm=MD5, qop=auth)
+  const creds = { username: 'Mufasa', password: 'Circle Of Life' };
+  const challenge = { realm: 'testrealm@host.com', nonce: 'dcd98b7102dd2f0e8b11d0f600bfb0c093', qop: 'auth', opaque: '5ccc069c403ebaf9f0171e9517f40e41' };
+
+  const header = buildDigestHeader(creds, 'GET', '/dir/index.html', challenge);
+  const fields = parseDigestChallenge(header);
+
+  assert.strictEqual(fields.username, 'Mufasa');
+  assert.strictEqual(fields.realm, challenge.realm);
+  assert.strictEqual(fields.nonce, challenge.nonce);
+  assert.strictEqual(fields.opaque, challenge.opaque);
+  assert.strictEqual(fields.qop, 'auth');
+  assert.strictEqual(fields.nc, '00000001');
+  assert.match(fields.response, /^[a-f0-9]{32}$/);
+
+  // The response should be reproducible with the same nc/cnonce
+  const md5 = s => require('crypto').createHash('md5').update(s).digest('hex');
+  const ha1 = md5(`${creds.username}:${challenge.realm}:${creds.password}`);
+  const ha2 = md5(`GET:/dir/index.html`);
+  const expected = md5(`${ha1}:${challenge.nonce}:${fields.nc}:${fields.cnonce}:${challenge.qop}:${ha2}`);
+  assert.strictEqual(fields.response, expected);
 });
 
 test.after(() => {
