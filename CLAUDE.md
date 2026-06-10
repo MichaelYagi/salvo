@@ -10,7 +10,13 @@ Salvo is a local-first HTTP client — a lightweight Postman alternative. Single
 
 ```bash
 node server.js
-# then open http://localhost:8080
+# then open http://localhost:5874
+```
+
+Pick a different port with `--port=<port>` (or `--port <port>`), or the `PORT` env var (`--port` takes precedence):
+
+```bash
+node server.js --port=3000
 ```
 
 `server.js` is a stdlib-only Node HTTP server (no `npm install`, no dependencies). It serves the static files (`index.html`, `js/`, `css/`) and exposes a small JSON API used to load and save data from the `data/` directory:

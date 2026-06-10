@@ -28,7 +28,13 @@ Salvo needs its local server — it's what reads/writes `data/` and proxies outb
 node server.js
 ```
 
-Then open `http://localhost:8080`. No `npm install`, no dependencies — `server.js` only uses Node's standard library.
+Then open `http://localhost:5874`. No `npm install`, no dependencies — `server.js` only uses Node's standard library.
+
+To use a different port, pass `--port=<port>` (or set the `PORT` env var):
+
+```bash
+node server.js --port=3000
+```
 
 ## Project structure
 

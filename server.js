@@ -9,10 +9,22 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
+// ─── CLI args ───────────────────────────────────────────────────────────────────
+// `node server.js --port=<port>` or `node server.js --port <port>`
+function getCliPort() {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith('--port=')) return arg.slice('--port='.length);
+    if (arg === '--port')          return args[i + 1];
+  }
+  return undefined;
+}
+
 const ROOT      = __dirname;
 const DATA_DIR  = process.env.SALVO_DATA_DIR || path.join(ROOT, 'data');
 const SALVO_DIR = path.join(DATA_DIR, '_salvo');
-const PORT      = process.env.PORT || 8080;
+const PORT      = getCliPort() || process.env.PORT || 5874;
 const LOG_DIR   = process.env.SALVO_LOG_DIR || path.join(ROOT, 'logs');
 const LOG_FILE  = path.join(LOG_DIR, 'salvo.log');
 
