@@ -28,10 +28,43 @@ async function loadData() {
     })),
   }));
 
-  state.envs = data.envs?.length ? data.envs : [{ id: 'default', name: 'No Environment', vars: {} }];
-  state.hist = data.hist || [];
+  state.envs      = data.envs?.length ? data.envs : [{ id: 'default', name: 'No Environment', vars: [] }];
+  state.activeEnv = data.activeEnv || 'default';
+  state.hist      = data.hist || [];
 
   state.expandedCols = new Set(state.cols.map(c => c.id));
+
+  // Restore open tabs from the last session. Saved tabs reference requests by
+  // {col, folder, name} (see findReqLocation/findReqByLocation) since `id`s
+  // are ephemeral and regenerated on every load.
+  let activeIdx = -1;
+  state.tabs = (data.openTabs || []).map((ot, i) => {
+    const r = findReqByLocation(ot);
+    if (!r) return null;
+    if (i === data.activeIndex) activeIdx = i;
+    return {
+      id: uid(), reqId: r.id, req: clone(r), resp: null,
+      reqTab: ot.reqTab || 'headers', respTab: 'body', loading: false, abortCtrl: null,
+    };
+  });
+  const activeTabAtIdx = activeIdx >= 0 ? state.tabs[activeIdx] : null;
+  state.tabs = state.tabs.filter(Boolean);
+  state.activeTabId = activeTabAtIdx ? activeTabAtIdx.id : (state.tabs[0]?.id || null);
+}
+
+// ─── Serialize open tabs for persistence ───────────────────────────────────────
+function serializeOpenTabs() {
+  return state.tabs.filter(t => t.reqId).map(t => {
+    const loc = findReqLocation(t.reqId);
+    return loc ? { ...loc, reqTab: t.reqTab } : null;
+  }).filter(Boolean);
+}
+
+// Index of the active tab within serializeOpenTabs()'s output (or -1)
+function activeOpenTabIndex() {
+  const tab = activeTab();
+  if (!tab || !tab.reqId) return -1;
+  return state.tabs.filter(t => t.reqId).indexOf(tab);
 }
 
 async function saveAll(silent = false) {
@@ -40,7 +73,7 @@ async function saveAll(silent = false) {
     const res = await fetch('/api/save', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ cols: state.cols, envs: state.envs, hist: state.hist }),
+      body:    JSON.stringify({ cols: state.cols, envs: state.envs, activeEnv: state.activeEnv, hist: state.hist, openTabs: serializeOpenTabs(), activeIndex: activeOpenTabIndex() }),
     });
     const data = await res.json();
     if (data.ok) {
@@ -84,7 +117,8 @@ async function init() {
   renderEnvSelect();
   renderSidebar();
   setupResizer();
-  showEmptyState();
+  if (activeTab()) showReqEditor();
+  else showEmptyState();
   document.addEventListener('click', hideCtxMenu);
 
   document.addEventListener('keydown', e => {
@@ -97,7 +131,7 @@ async function init() {
   window.addEventListener('beforeunload', () => {
     clearTimeout(_diskSaveTimer);
     syncAllTabsIntoCols();
-    const payload = JSON.stringify({ cols: state.cols, envs: state.envs, hist: state.hist });
+    const payload = JSON.stringify({ cols: state.cols, envs: state.envs, activeEnv: state.activeEnv, hist: state.hist, openTabs: serializeOpenTabs(), activeIndex: activeOpenTabIndex() });
     navigator.sendBeacon('/api/save', new Blob([payload], { type: 'application/json' }));
   });
 }

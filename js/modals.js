@@ -45,24 +45,9 @@ function renderEnvDetail() {
   let html = `<input value="${esc(env.name)}" oninput="envRename(this.value)"
                      style="width:100%;margin-bottom:12px;font-size:13px">`;
 
-  Object.entries(env.vars).forEach(([k, v]) => {
-    html += `
-      <div class="env-kv-grid">
-        <input value="${esc(k)}" readonly style="opacity:.7">
-        <input value="${esc(v)}" oninput="envSetVar('${esc(k)}',this.value)">
-        <button onclick="envDelVar('${esc(k)}')"
-                style="color:#f85149;background:none;border:none;cursor:pointer;font-size:15px">×</button>
-      </div>`;
-  });
+  html += kvEditorHTML(env.vars, 'envVars');
 
   html += `
-    <div class="env-kv-grid" style="margin-top:10px">
-      <input id="env-new-k" placeholder="Variable" style="font-family:monospace;font-size:11px">
-      <input id="env-new-v" placeholder="Value"    style="font-family:monospace;font-size:11px"
-             onkeydown="if(event.key==='Enter')envAddVar()">
-      <button onclick="envAddVar()"
-              style="color:#58a6ff;background:none;border:none;cursor:pointer;font-size:18px">+</button>
-    </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn-primary" onclick="envUse()">Use This Environment</button>
       ${env.id !== 'default' ? `<button onclick="envDelete()" style="color:#f85149">Delete</button>` : ''}
@@ -78,26 +63,9 @@ function envQuickSwitch(id) { state.activeEnv = id; scheduleDiskSave(); }
 
 function envSelect(id)      { state.envSelId = id; renderEnvModal(); }
 function envRename(name)    { const e = getSelEnv(); if (e) { e.name = name; scheduleDiskSave(); } }
-function envSetVar(k, v)    { const e = getSelEnv(); if (e) { e.vars[k] = v; scheduleDiskSave(); } }
-
-function envDelVar(k) {
-  const e = getSelEnv();
-  if (!e) return;
-  delete e.vars[k];
-  renderEnvModal();
-  scheduleDiskSave();
-}
-
-function envAddVar() {
-  const k = document.getElementById('env-new-k').value.trim();
-  const v = document.getElementById('env-new-v').value;
-  if (!k) return;
-  const e = getSelEnv();
-  if (e) { e.vars[k] = v; renderEnvModal(); scheduleDiskSave(); }
-}
 
 function addEnv() {
-  const e = { id: uid(), name: 'New Environment', vars: {} };
+  const e = { id: uid(), name: 'New Environment', vars: [] };
   state.envs.push(e);
   state.envSelId = e.id;
   renderEnvModal();

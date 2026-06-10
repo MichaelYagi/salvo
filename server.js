@@ -136,22 +136,47 @@ function walkDataDir() {
   return files;
 }
 
+// Older saves stored env vars as a {key: value} object; convert to the
+// array-of-rows shape ({id, key, value, enabled}) used by the kv editor.
+function normalizeEnvs(envs) {
+  return envs.map(e => ({
+    ...e,
+    vars: Array.isArray(e.vars)
+      ? e.vars
+      : Object.entries(e.vars || {}).map(([key, value]) => ({ id: crypto.randomUUID(), key, value, enabled: true })),
+  }));
+}
+
 // ─── Load all collections + envs + history from data/ ─────────────────────────
+// envs.json is { activeEnv, list } — older saves stored a bare array (no
+// activeEnv), which is treated as `list` with activeEnv defaulting to 'default'.
 function loadData() {
   const { cols, envs, hist } = buildColsFromFiles(walkDataDir());
 
+  const list      = Array.isArray(envs) ? envs : envs?.list;
+  const activeEnv = Array.isArray(envs) ? 'default' : (envs?.activeEnv || 'default');
+
+  let tabsData = {};
+  try { tabsData = JSON.parse(fs.readFileSync(path.join(SALVO_DIR, 'tabs.json'), 'utf8')); } catch {}
+
   return {
     cols,
-    envs: envs?.length ? envs : [{ id: 'default', name: 'No Environment', vars: {} }],
+    envs: normalizeEnvs(list?.length ? list : [{ id: 'default', name: 'No Environment', vars: [] }]),
+    activeEnv,
     hist: hist || [],
+    openTabs:    Array.isArray(tabsData.openTabs) ? tabsData.openTabs : [],
+    activeIndex: typeof tabsData.activeIndex === 'number' ? tabsData.activeIndex : -1,
   };
 }
 
 // ─── Persist collections + envs + history to data/ ─────────────────────────────
 function saveData(payload) {
-  const cols = Array.isArray(payload.cols) ? payload.cols : [];
-  const envs = Array.isArray(payload.envs) ? payload.envs : [];
-  const hist = Array.isArray(payload.hist) ? payload.hist : [];
+  const cols      = Array.isArray(payload.cols) ? payload.cols : [];
+  const envs      = Array.isArray(payload.envs) ? payload.envs : [];
+  const hist      = Array.isArray(payload.hist) ? payload.hist : [];
+  const activeEnv = payload.activeEnv || 'default';
+  const openTabs  = Array.isArray(payload.openTabs) ? payload.openTabs : [];
+  const activeIndex = typeof payload.activeIndex === 'number' ? payload.activeIndex : -1;
 
   fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -184,8 +209,9 @@ function saveData(payload) {
   }
 
   fs.mkdirSync(SALVO_DIR, { recursive: true });
-  fs.writeFileSync(path.join(SALVO_DIR, 'envs.json'),    JSON.stringify(envs, null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'envs.json'),    JSON.stringify({ activeEnv, list: envs }, null, 2));
   fs.writeFileSync(path.join(SALVO_DIR, 'history.json'), JSON.stringify(hist.slice(-200), null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'tabs.json'),    JSON.stringify({ openTabs, activeIndex }, null, 2));
 }
 
 // ─── HTTP server ────────────────────────────────────────────────────────────────
@@ -224,8 +250,10 @@ const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
+      let url, method;
       try {
-        const { url, method, headers, body: reqBody, bodyKind, digestAuth } = JSON.parse(body);
+        let headers, reqBody, bodyKind, digestAuth;
+        ({ url, method, headers, body: reqBody, bodyKind, digestAuth } = JSON.parse(body));
 
         function buildFetchBody() {
           if (bodyKind === 'raw') return reqBody;
@@ -305,5 +333,5 @@ if (require.main === module) {
 
 module.exports = {
   sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server,
-  parseDigestChallenge, buildDigestHeader, log,
+  parseDigestChallenge, buildDigestHeader, normalizeEnvs, log,
 };

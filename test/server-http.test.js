@@ -36,15 +36,21 @@ test('GET /api/data returns default envs/hist for an empty data dir', async () =
 
   const data = await res.json();
   assert.deepStrictEqual(data.cols, []);
-  assert.deepStrictEqual(data.envs, [{ id: 'default', name: 'No Environment', vars: {} }]);
+  assert.deepStrictEqual(data.envs, [{ id: 'default', name: 'No Environment', vars: [] }]);
+  assert.strictEqual(data.activeEnv, 'default');
   assert.deepStrictEqual(data.hist, []);
+  assert.deepStrictEqual(data.openTabs, []);
+  assert.strictEqual(data.activeIndex, -1);
 });
 
 test('POST /api/save then GET /api/data round trips collections', async () => {
   const payload = {
     cols: [{ name: 'Demo', requests: [{ id: 'r1', name: 'Ping', method: 'GET', url: '/ping' }], folders: [] }],
-    envs: [{ id: 'default', name: 'No Environment', vars: { token: 'abc' } }],
+    envs: [{ id: 'default', name: 'No Environment', vars: [{ id: 'v1', key: 'token', value: 'abc', enabled: true }] }],
+    activeEnv: 'default',
     hist: [{ method: 'GET', url: '/ping', status: 200, elapsed: 5 }],
+    openTabs: [{ col: 'Demo', folder: null, name: 'Ping', reqTab: 'body' }],
+    activeIndex: 0,
   };
 
   const saveRes = await fetch(`${base}/api/save`, {
@@ -60,8 +66,11 @@ test('POST /api/save then GET /api/data round trips collections', async () => {
   assert.strictEqual(data.cols.length, 1);
   assert.strictEqual(data.cols[0].name, 'Demo');
   assert.strictEqual(data.cols[0].requests[0].name, 'Ping');
-  assert.strictEqual(data.envs[0].vars.token, 'abc');
+  assert.strictEqual(data.envs[0].vars[0].value, 'abc');
+  assert.strictEqual(data.activeEnv, 'default');
   assert.strictEqual(data.hist[0].url, '/ping');
+  assert.deepStrictEqual(data.openTabs, [{ col: 'Demo', folder: null, name: 'Ping', reqTab: 'body' }]);
+  assert.strictEqual(data.activeIndex, 0);
 });
 
 test('POST /api/save with invalid JSON returns ok:false', async () => {

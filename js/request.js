@@ -72,9 +72,9 @@ function switchReqTab(tabName) {
   const tab = activeTab();
   if (!tab) return;
   tab.reqTab = tabName;
-  if (tab.reqId) state.reqTabByReqId.set(tab.reqId, tabName);
   updateTabBadges();
   renderReqPanel();
+  scheduleDiskSave();
 }
 
 // ─── Request panel dispatcher ─────────────────────────────────────────────────
@@ -290,22 +290,41 @@ function kvEditorHTML(rows, key) {
       </div>`;
   });
 
-  const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : 'field';
+  const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : key === 'envVars' ? 'variable' : 'field';
   html += `<button class="kv-add" onclick="kvAdd('${key}')">+ Add ${addLabel}</button>`;
   return html;
 }
 
 function getKvTarget(key) {
+  if (key === 'envVars') return getSelEnv()?.vars;
   const r = activeTab().req;
   if (key === 'params')   return r.params;
   if (key === 'headers')  return r.headers;
   if (key === 'formData') return r.body.formData;
 }
 
-function kvToggle(key, i, v)        { getKvTarget(key)[i].enabled   = v; scheduleAutoSave(); updateTabBadges(); if (activeTab().reqTab === 'curl') renderReqPanel(); }
-function kvSet(key, i, field, v)    { getKvTarget(key)[i][field]     = v; scheduleAutoSave(); updateTabBadges(); if (activeTab().reqTab === 'curl') renderReqPanel(); }
-function kvDel(key, i)              { getKvTarget(key).splice(i, 1);     scheduleAutoSave(); updateTabBadges(); renderReqPanel(); }
-function kvAdd(key)                 { getKvTarget(key).push({ id: uid(), key: '', value: '', enabled: true }); scheduleAutoSave(); renderReqPanel(); }
+function kvToggle(key, i, v) {
+  getKvTarget(key)[i].enabled = v;
+  if (key === 'envVars') return scheduleDiskSave();
+  scheduleAutoSave(); updateTabBadges();
+  if (activeTab().reqTab === 'curl') renderReqPanel();
+}
+function kvSet(key, i, field, v) {
+  getKvTarget(key)[i][field] = v;
+  if (key === 'envVars') return scheduleDiskSave();
+  scheduleAutoSave(); updateTabBadges();
+  if (activeTab().reqTab === 'curl') renderReqPanel();
+}
+function kvDel(key, i) {
+  getKvTarget(key).splice(i, 1);
+  if (key === 'envVars') { scheduleDiskSave(); renderEnvDetail(); return; }
+  scheduleAutoSave(); updateTabBadges(); renderReqPanel();
+}
+function kvAdd(key) {
+  getKvTarget(key).push({ id: uid(), key: '', value: '', enabled: true });
+  if (key === 'envVars') { scheduleDiskSave(); renderEnvDetail(); return; }
+  scheduleAutoSave(); renderReqPanel();
+}
 
 // ─── Auth Editor ──────────────────────────────────────────────────────────────
 

@@ -27,7 +27,7 @@ A plain static server (e.g. `python3 -m http.server`) won't work — Salvo needs
 - **Collections are directories**: `data/<Collection Name>/`
 - **Requests are files**: `data/<Collection Name>/<Request Name>.json`, containing the Request object (see below), minus its `id` (ids are ephemeral and regenerated on load)
 - **Folders are NOT directories** — a request that belongs to a Postman-style folder has an extra `"folder": "<Folder Name>"` field in its JSON file. The directory layout is always flat, one level deep.
-- **Envs and history**: `data/_salvo/envs.json` and `data/_salvo/history.json`
+- **Envs, history, and open tabs**: `data/_salvo/envs.json`, `data/_salvo/history.json`, and `data/_salvo/tabs.json`
 
 On load, `server.js` walks `data/`, groups requests by their `folder` field back into `Collection.folders`, and regenerates `id`s. On save, it wipes and rewrites every collection directory from the current in-memory state — renames/deletions are handled by this wipe-and-rewrite, not by diffing. Filenames are sanitized and de-duplicated (` (2)`, ` (3)`, ...) via `sanitizeName`/`uniqueName` in `server.js`.
 
@@ -47,7 +47,7 @@ All JS files share the **global browser scope** and are loaded as plain `<script
 | `js/response.js` | `renderRespPanel()`, `switchRespTab()`, `copyResponse()`, `buildJsonTree()` |
 | `js/send.js` | `sendRequest()`, `cancelReq()`, `buildRequestArgs()`, `parseResponse()`, `ensureOAuthToken()`/`fetchOAuthToken()`/`manualFetchOAuthToken()`, `buildJwt()` |
 | `js/collections.js` | `findReq()`, `selectReq()`, `addCollection/Folder/Req()`, `deleteCol/Req()`, `dupReq()`, `renameCol()`, `exportCol()`, `importFile()`, `parsePostman()` |
-| `js/modals.js` | `openEnvModal()`, `closeEnvModal()`, `renderEnvSelect()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()`, `envSelect/Rename/SetVar/DelVar/AddVar/Use/Delete()`, `envQuickSwitch()`, `addEnv()`, `getSelEnv()` |
+| `js/modals.js` | `openEnvModal()`, `closeEnvModal()`, `renderEnvSelect()`, `renderEnvModal()`, `renderEnvList()`, `renderEnvDetail()` (vars edited via `kvEditorHTML(env.vars, 'envVars')`), `envSelect/Rename/Use/Delete()`, `envQuickSwitch()`, `addEnv()`, `getSelEnv()` |
 | `js/app.js` | `init()`, `loadData()`, `saveAll()`, `setupResizer()`, `toggleHistPanel()`, `renderHistPanel()`, `replayHistory()`, `clearHistory()` |
 
 > **Note:** `css/curl.js` is a stray file — it is not loaded by `index.html` and should be ignored. The active curl code is `js/curl.js`.
@@ -68,14 +68,14 @@ All JS files share the **global browser scope** and are loaded as plain `<script
 state = {
   // loaded from data/ via GET /api/data on init, auto-saved back via POST /api/save
   cols:    [],          // array of Collection objects
-  envs:    [],          // array of { id, name, vars: {} }
+  envs:    [],          // array of { id, name, vars: [{ id, key, value, enabled }] }
   hist:    [],          // array of { method, url, status, elapsed } — capped at 200
 
-  // runtime only
+  // runtime only — open tabs are restored from data/_salvo/tabs.json on load
+  // (see openTabs/activeIndex below) and re-saved via serializeOpenTabs()/activeOpenTabIndex()
   activeEnv:       'default',
   tabs:            [],   // array of Tab objects (browser-style request tabs), see below
   activeTabId:     null, // id of the focused tab, or null when state.tabs is empty
-  reqTabByReqId:   Map,  // reqId -> last-used reqTab ('params'|'headers'|...), used when (re)opening a request
   expandedCols:    Set,
   expandedFolders: Set,
   showHist:        false,
@@ -100,11 +100,25 @@ state = {
 }
 ```
 
-The app starts with zero tabs (`#empty-state` shown). `openTab(reqId)` opens a
-request in a new tab or focuses its existing tab. `activeTab()` returns
-`state.tabs.find(t => t.id === state.activeTabId) || null` and is the
-single accessor used everywhere in place of the old singular `state.req`/
+On a fresh load with no saved tabs, the app starts with zero tabs
+(`#empty-state` shown). Otherwise `loadData()` restores `state.tabs` from
+`data/_salvo/tabs.json` (`{ openTabs: [{col, folder, name, reqTab}],
+activeIndex }`, written by `saveData()`/the `beforeunload` handler). Request
+`id`s are ephemeral and regenerated on every load, so each open tab is keyed
+by a stable `{col, folder, name}` location instead — `findReqLocation(id)`/
+`findReqByLocation(loc)` (in `js/collections.js`) translate between a tab's
+`reqId` and that location. Each `openTabs` entry that still resolves via
+`findReqByLocation()` becomes a tab (a fresh `clone()` of the saved request,
+`reqTab` restored, `resp: null`), and `activeIndex` selects which one is
+focused. `openTab(reqId)` opens a request in a new tab (defaulting to the
+`headers` reqTab) or focuses its existing tab. `activeTab()` returns
+`state.tabs.find(t => t.id === state.activeTabId) || null` and is the single
+accessor used everywhere in place of the old singular `state.req`/
 `state.resp`/etc. fields. Closing the last tab returns to the empty state.
+`serializeOpenTabs()` and `activeOpenTabIndex()` (in `js/app.js`) build the
+persisted `openTabs`/`activeIndex` payload — `openTab`/`closeTab`/
+`switchTab`/`switchReqTab` each call `scheduleDiskSave()` so the open-tab set
+and per-tab `reqTab` survive a refresh.
 
 ### Collection shape
 

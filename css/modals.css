@@ -25,6 +25,12 @@
 .modal label  { display: block; color: #8b949e; font-size: 11px; margin-bottom: 4px; }
 .modal input,
 .modal select { width: 100%; margin-bottom: 12px; }
+
+/* kv-grid rows (env vars) manage their own spacing via margin-bottom on the
+   row itself — without this, .modal input's margin-bottom throws off
+   align-items: center, leaving the delete button visually off-centre. */
+.modal .kv-grid input,
+.modal .kv-grid-notes input { margin-bottom: 0; }
 .modal p      { color: #8b949e; font-size: 12px; line-height: 1.6; margin-bottom: 16px; }
 
 .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
@@ -39,9 +45,6 @@
 .env-item:hover  { background: #21262d; }
 .env-item.active { background: #21262d; color: #e6edf3; }
 .env-dot         { margin-left: 5px; color: #58a6ff; font-size: 9px; }
-
-.env-kv-grid       { display: grid; grid-template-columns: 1fr 1fr 24px; gap: 6px; margin-bottom: 4px; }
-.env-kv-grid input { font-size: 11px; font-family: monospace; width: 100%; }
 
 /* ─── Notifications (toast) ─────────────────────────────────────────────────── */
 .notif {

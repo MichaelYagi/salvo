@@ -16,12 +16,12 @@ const MC = {
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 const state = {
-  // All three loaded from data/ via /api/data — see loadData() in app.js
-  cols:    [],
-  envs:    [{ id: 'default', name: 'No Environment', vars: {} }],
-  hist:    [],
+  // Loaded from data/ via /api/data — see loadData() in app.js
+  cols:      [],
+  envs:      [{ id: 'default', name: 'No Environment', vars: [] }],
+  activeEnv: 'default',
+  hist:      [],
 
-  activeEnv:       'default',
   tabs:            [],     // open request tabs — see js/tabs.js
   activeTabId:     null,
   expandedCols:    new Set(),
@@ -30,7 +30,6 @@ const state = {
   envSelId:        'default',
   selectedReqIds:  new Set(),
   lastSelReqId:    null,
-  reqTabByReqId:   new Map(), // remembers the last-active tab per request (runtime only)
 };
 
 // ─── Auto-sync working request back into state.cols, then auto-save to disk ───
@@ -103,8 +102,11 @@ function esc(s) {
 /** Interpolate {{variable}} placeholders using the active environment */
 function interp(s) {
   if (!s) return s;
-  const vars = state.envs.find(e => e.id === state.activeEnv)?.vars ?? {};
-  return s.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+  const vars = state.envs.find(e => e.id === state.activeEnv)?.vars ?? [];
+  return s.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    const row = vars.find(v => v.key === k && v.enabled);
+    return row ? row.value : `{{${k}}}`;
+  });
 }
 
 /** Emit a toast notification (success | error | info) */

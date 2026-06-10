@@ -8,6 +8,29 @@ function findReq(id) {
   return null;
 }
 
+// Request `id`s are ephemeral and regenerated on every load (see CLAUDE.md), so
+// they can't be used to refer to a request across a page reload. These two
+// helpers translate to/from a stable {col, folder, name} location, used to
+// persist open tabs in data/_salvo/tabs.json.
+function findReqLocation(id) {
+  for (const col of state.cols) {
+    for (const r of col.requests) if (r.id === id) return { col: col.name, folder: null, name: r.name };
+    for (const f of col.folders) for (const r of f.requests) if (r.id === id) return { col: col.name, folder: f.name, name: r.name };
+  }
+  return null;
+}
+
+function findReqByLocation(loc) {
+  if (!loc) return null;
+  const col = state.cols.find(c => c.name === loc.col);
+  if (!col) return null;
+  if (loc.folder) {
+    const f = col.folders.find(f => f.name === loc.folder);
+    return f?.requests.find(r => r.name === loc.name) || null;
+  }
+  return col.requests.find(r => r.name === loc.name) || null;
+}
+
 function selectReq(id) {
   openTab(id);
 }
@@ -272,13 +295,13 @@ function exportAll() {
 function mergeEnvVars(envName, pairs) {
   let env = state.envs.find(e => e.name === envName);
   if (!env) {
-    env = { id: uid(), name: envName, vars: {} };
+    env = { id: uid(), name: envName, vars: [] };
     state.envs.push(env);
   }
   let added = 0;
   pairs.forEach(([k, v]) => {
-    if (!k || k in env.vars) return;
-    env.vars[k] = v ?? '';
+    if (!k || env.vars.some(row => row.key === k)) return;
+    env.vars.push({ id: uid(), key: k, value: v ?? '', enabled: true });
     added++;
   });
   return { envName: env.name, added };
@@ -332,7 +355,8 @@ function mergeImportedData(data) {
   (data.envs || []).forEach(ie => {
     if (!ie || !ie.name) return;
     const existed = state.envs.some(e => e.name === ie.name);
-    const { added: va } = mergeEnvVars(ie.name, Object.entries(ie.vars || {}));
+    const pairs = Array.isArray(ie.vars) ? ie.vars.map(v => [v.key, v.value]) : Object.entries(ie.vars || {});
+    const { added: va } = mergeEnvVars(ie.name, pairs);
     if (!existed) envsAdded++;
     varsAdded += va;
   });

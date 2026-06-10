@@ -11,6 +11,7 @@ function openTab(reqId) {
     renderSidebar();
     showReqEditor();
     closeSidebar();
+    scheduleDiskSave();
     return;
   }
 
@@ -22,7 +23,7 @@ function openTab(reqId) {
     reqId,
     req:       clone(r),
     resp:      null,
-    reqTab:    state.reqTabByReqId.get(reqId) || 'params',
+    reqTab:    'headers',
     respTab:   'body',
     loading:   false,
     abortCtrl: null,
@@ -33,6 +34,7 @@ function openTab(reqId) {
   renderSidebar();
   showReqEditor();
   closeSidebar();
+  scheduleDiskSave();
 }
 
 function closeTab(tabId, event) {
@@ -52,6 +54,7 @@ function closeTab(tabId, event) {
   renderSidebar();
   if (activeTab()) showReqEditor();
   else showEmptyState();
+  scheduleDiskSave();
 }
 
 function switchTab(tabId) {
@@ -59,6 +62,7 @@ function switchTab(tabId) {
   state.activeTabId = tabId;
   renderSidebar();
   showReqEditor();
+  scheduleDiskSave();
 }
 
 function renderTabStrip() {

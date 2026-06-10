@@ -14,7 +14,7 @@ const path = require('path');
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'salvo-test-'));
 process.env.SALVO_DATA_DIR = DATA_DIR;
 
-const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, parseDigestChallenge, buildDigestHeader } = require('../server.js');
+const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, normalizeEnvs, parseDigestChallenge, buildDigestHeader } = require('../server.js');
 
 function resetData() {
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
@@ -56,6 +56,23 @@ test('buildColsFromFiles groups requests, nests folders, and reads _salvo/*', ()
   assert.deepStrictEqual(hist, [{ method: 'GET', url: '/x', status: 200, elapsed: 12 }]);
 });
 
+test('normalizeEnvs migrates legacy {key: value} vars to the array-of-rows shape', () => {
+  const envs = normalizeEnvs([
+    { id: 'e1', name: 'Dev', vars: { baseUrl: 'http://localhost', token: 'abc' } },
+    { id: 'e2', name: 'Prod', vars: [{ id: 'v1', key: 'baseUrl', value: 'https://api.example.com', enabled: true }] },
+  ]);
+
+  assert.strictEqual(envs[0].vars.length, 2);
+  assert.deepStrictEqual(envs[0].vars.map(v => [v.key, v.value, v.enabled]), [
+    ['baseUrl', 'http://localhost', true],
+    ['token', 'abc', true],
+  ]);
+  assert.ok(envs[0].vars.every(v => typeof v.id === 'string' && v.id));
+
+  // Already-array vars pass through unchanged.
+  assert.deepStrictEqual(envs[1].vars, [{ id: 'v1', key: 'baseUrl', value: 'https://api.example.com', enabled: true }]);
+});
+
 test('saveData + loadData round trip preserves collections, folders, envs, and history', () => {
   resetData();
 
@@ -74,10 +91,16 @@ test('saveData + loadData round trip preserves collections, folders, envs, and h
       ],
     },
   ];
-  const envs = [{ id: 'default', name: 'No Environment', vars: {} }];
+  const envs = [{ id: 'default', name: 'No Environment', vars: [{ id: 'v1', key: 'baseUrl', value: 'http://localhost', enabled: true }] }];
   const hist = [{ method: 'GET', url: '/users', status: 200, elapsed: 10 }];
+  const activeEnv = 'default';
+  const openTabs = [
+    { col: 'Demo', folder: null, name: 'Get Users', reqTab: 'body' },
+    { col: 'Demo', folder: 'Admin', name: 'Create User', reqTab: 'auth' },
+  ];
+  const activeIndex = 1;
 
-  saveData({ cols, envs, hist });
+  saveData({ cols, envs, activeEnv, hist, openTabs, activeIndex });
 
   // On-disk layout: flat <Collection>/<Request>.json, folder requests get a "folder" field, ids stripped
   assert.ok(fs.existsSync(path.join(DATA_DIR, 'Demo', 'Get Users.json')));
@@ -94,7 +117,19 @@ test('saveData + loadData round trip preserves collections, folders, envs, and h
   assert.strictEqual(loaded.cols[0].folders[0].name, 'Admin');
   assert.strictEqual(loaded.cols[0].folders[0].requests[0].name, 'Create User');
   assert.deepStrictEqual(loaded.envs, envs);
+  assert.strictEqual(loaded.activeEnv, activeEnv);
   assert.deepStrictEqual(loaded.hist, hist);
+  assert.deepStrictEqual(loaded.openTabs, openTabs);
+  assert.strictEqual(loaded.activeIndex, activeIndex);
+});
+
+test('loadData defaults openTabs/activeIndex when tabs.json is absent', () => {
+  resetData();
+  saveData({ cols: [], envs: [], hist: [] });
+
+  const loaded = loadData();
+  assert.deepStrictEqual(loaded.openTabs, []);
+  assert.strictEqual(loaded.activeIndex, -1);
 });
 
 test('saveData removes deleted collection directories and de-duplicates request file names', () => {
