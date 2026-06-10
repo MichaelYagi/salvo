@@ -86,6 +86,10 @@
 .kv-add          { color: var(--accent); margin-top: 4px; }
 .kv-add:hover    { background: none !important; opacity: .8; }
 
+/* ─── Computed (auto-generated) headers from the Auth tab ───────────────────── */
+.kv-computed-label { color: var(--text-muted); font-size: 11px; margin: 12px 0 5px; }
+.kv-computed input { color: var(--text-muted) !important; opacity: .7; cursor: not-allowed; }
+
 /* ─── Header Value Autocomplete ────────────────────────────────────────────── */
 .header-suggest {
   position: absolute;

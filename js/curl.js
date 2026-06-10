@@ -49,11 +49,7 @@ function buildCurl() {
   if (body.type === 'raw' && body.raw) {
     const hasContentType = r.headers.some(h => h.enabled && h.key.toLowerCase() === 'content-type');
     if (!hasContentType) {
-      const ct = body.contentType === 'json' ? 'application/json'
-               : body.contentType === 'xml'  ? 'application/xml'
-               : body.contentType === 'html' ? 'text/html'
-               :                               'text/plain';
-      parts.push(`-H 'Content-Type: ${ct}'`);
+      parts.push(`-H 'Content-Type: ${rawContentTypeHeader(body.contentType)}'`);
     }
     const escaped = interp(body.raw).replace(/'/g, `'\\''`);
     parts.push(`-d '${escaped}'`);

@@ -45,15 +45,15 @@ function addCollection() {
   scheduleDiskSave();
 }
 
-function renameCol(id) {
+async function renameCol(id) {
   const col = state.cols.find(c => c.id === id);
   if (!col) return;
-  const name = prompt('Rename collection:', col.name);
+  const name = await promptDialog('Rename collection:', col.name);
   if (name !== null) { col.name = name; renderSidebar(); scheduleDiskSave(); }
 }
 
-function deleteCol(id) {
-  if (!confirm('Delete this collection?')) return;
+async function deleteCol(id) {
+  if (!await confirmDialog('Delete this collection?', { okLabel: 'Delete', danger: true })) return;
   state.cols = state.cols.filter(c => c.id !== id);
   renderSidebar();
   scheduleDiskSave();
@@ -189,10 +189,10 @@ function deleteReq(id) {
   deleteReqs([id]);
 }
 
-function renameReq(id) {
+async function renameReq(id) {
   const r = findReq(id);
   if (!r) return;
-  const name = prompt('Rename request:', r.name);
+  const name = await promptDialog('Rename request:', r.name);
   if (name === null) return;
   r.name = name;
 

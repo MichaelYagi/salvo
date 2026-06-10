@@ -255,6 +255,96 @@ function kvHeaderBlur() {
   setTimeout(hideHeaderSuggest, 150);
 }
 
+// ─── URL <-> Params sync ───────────────────────────────────────────────────────
+// Keeps the URL bar's query string and the Params table in sync, like Postman.
+
+function splitUrlQuery(url) {
+  const i = url.indexOf('?');
+  return i === -1 ? { base: url, query: '' } : { base: url.slice(0, i), query: url.slice(i + 1) };
+}
+
+function parseQueryString(query) {
+  if (!query) return [];
+  return query.split('&').map(pair => {
+    const i = pair.indexOf('=');
+    return i === -1 ? { key: pair, value: '' } : { key: pair.slice(0, i), value: pair.slice(i + 1) };
+  });
+}
+
+// Rebuild req.params from the URL's query string after the user edits the URL bar,
+// preserving notes/ids of rows whose key is unchanged and keeping disabled/blank rows.
+function syncParamsFromUrl() {
+  const req     = activeTab().req;
+  const parsed  = parseQueryString(splitUrlQuery(req.url).query);
+  const used    = new Set();
+
+  const newParams = parsed.map(p => {
+    const idx = req.params.findIndex((op, i) => !used.has(i) && op.key === p.key);
+    if (idx !== -1) {
+      used.add(idx);
+      return { ...req.params[idx], value: p.value, enabled: true };
+    }
+    return { id: uid(), key: p.key, value: p.value, enabled: true, note: '' };
+  });
+
+  const leftover = req.params.filter((op, i) => !used.has(i) && (!op.enabled || !op.key));
+  req.params = [...newParams, ...leftover];
+}
+
+// Rebuild the URL's query string from req.params after the user edits the Params table.
+function syncUrlFromParams() {
+  const req   = activeTab().req;
+  const base  = splitUrlQuery(req.url).base;
+  const query = req.params.filter(p => p.enabled && p.key).map(p => `${p.key}=${p.value}`).join('&');
+
+  req.url = query ? `${base}?${query}` : base;
+  const urlInput = document.getElementById('url-input');
+  if (urlInput) urlInput.value = req.url;
+}
+
+// ─── Auth/Body -> computed headers preview ────────────────────────────────────
+// Mirrors the headers send.js's buildRequestArgs() adds on top of req.headers,
+// shown read-only on the Headers tab (Postman calls these "auto-generated").
+
+function computedAuthHeaders(auth) {
+  switch (auth.type) {
+    case 'bearer':
+      return auth.token ? [{ key: 'Authorization', value: `Bearer ${interp(auth.token)}` }] : [];
+    case 'basic':
+      return (auth.username || auth.password)
+        ? [{ key: 'Authorization', value: `Basic ${btoa(`${interp(auth.username)}:${interp(auth.password)}`)}` }]
+        : [];
+    case 'apikey':
+      return auth.apiKey ? [{ key: interp(auth.apiKey), value: interp(auth.apiValue) }] : [];
+    case 'oauth2_cc':
+    case 'oauth2_pwd':
+      return [{ key: 'Authorization', value: `Bearer ${auth.cachedToken || '<fetched automatically when sent>'}` }];
+    case 'jwt':
+      return auth.jwtSecret ? [{ key: 'Authorization', value: 'Bearer <generated automatically when sent>' }] : [];
+    default:
+      return [];
+  }
+}
+
+// Content-Type Body adds when the user hasn't set one explicitly.
+function computedBodyHeaders(req) {
+  const hasContentType = req.headers.some(h => h.enabled && h.key.toLowerCase() === 'content-type');
+  if (hasContentType) return [];
+
+  const b = req.body;
+  if (b.type === 'raw' && b.raw)  return [{ key: 'Content-Type', value: rawContentTypeHeader(b.contentType) }];
+  if (b.type === 'formdata')      return [{ key: 'Content-Type', value: 'multipart/form-data; boundary=...' }];
+  if (b.type === 'urlencoded')    return [{ key: 'Content-Type', value: 'application/x-www-form-urlencoded' }];
+  return [];
+}
+
+function computedHeaders(req) {
+  return [
+    ...computedAuthHeaders(req.auth).map(h => ({ ...h, source: 'Auth tab' })),
+    ...computedBodyHeaders(req).map(h => ({ ...h, source: 'Body tab' })),
+  ];
+}
+
 // ─── KV Editor (params / headers / form-data fields) ─────────────────────────
 
 function kvEditorHTML(rows, key) {
@@ -294,6 +384,24 @@ function kvEditorHTML(rows, key) {
 
   const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : key === 'envVars' ? 'variable' : 'field';
   html += `<button class="kv-add" onclick="kvAdd('${key}')">+ Add ${addLabel}</button>`;
+
+  if (key === 'headers') {
+    const computed = computedHeaders(activeTab().req);
+    if (computed.length) {
+      html += `<div class="kv-computed-label">Auto-generated</div>`;
+      computed.forEach(h => {
+        html += `
+          <div class="kv-grid-notes kv-computed">
+            <input type="checkbox" checked disabled>
+            <input value="${esc(h.key)}" disabled>
+            <input value="${esc(h.value)}" disabled>
+            <input value="" disabled class="kv-note" placeholder="${esc(h.source)}">
+            <span></span>
+          </div>`;
+      });
+    }
+  }
+
   return html;
 }
 
@@ -308,18 +416,21 @@ function getKvTarget(key) {
 function kvToggle(key, i, v) {
   getKvTarget(key)[i].enabled = v;
   if (key === 'envVars') return scheduleDiskSave();
+  if (key === 'params') syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges();
   if (activeTab().reqTab === 'curl') renderReqPanel();
 }
 function kvSet(key, i, field, v) {
   getKvTarget(key)[i][field] = v;
   if (key === 'envVars') return scheduleDiskSave();
+  if (key === 'params' && (field === 'key' || field === 'value')) syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges();
   if (activeTab().reqTab === 'curl') renderReqPanel();
 }
 function kvDel(key, i) {
   getKvTarget(key).splice(i, 1);
   if (key === 'envVars') { scheduleDiskSave(); renderEnvDetail(); return; }
+  if (key === 'params') syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges(); renderReqPanel();
 }
 function kvAdd(key) {

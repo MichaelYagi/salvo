@@ -144,11 +144,11 @@ function copyResponse() {
 // ─── JSON Tree (DOM-built — no innerHTML, safe for any content) ───────────────
 
 // Save a value extracted from the response into the active environment.
-function saveJsonValueAsVar(value) {
+async function saveJsonValueAsVar(value) {
   const env = state.envs.find(e => e.id === state.activeEnv);
   if (!env) { notify('No active environment', 'error'); return; }
 
-  const name = prompt('Save as environment variable named:');
+  const name = await promptDialog('Save as environment variable named:');
   if (!name) return;
 
   const strValue = typeof value === 'string' ? value : JSON.stringify(value);

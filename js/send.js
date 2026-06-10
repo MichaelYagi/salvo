@@ -147,7 +147,7 @@ async function buildRequestArgs(req) {
     bodyKind    = 'raw';
     bodyPayload = interp(req.body.raw);
     if (!headers['Content-Type'] && !headers['content-type']) {
-      headers['Content-Type'] = 'application/json';
+      headers['Content-Type'] = rawContentTypeHeader(req.body.contentType);
     }
   } else if (bt === 'formdata') {
     bodyKind    = 'formdata';

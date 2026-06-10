@@ -80,6 +80,14 @@ function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+/** Maps a raw body's contentType ('json'|'xml'|'html'|'text') to its MIME type */
+function rawContentTypeHeader(contentType) {
+  return contentType === 'json' ? 'application/json'
+       : contentType === 'xml'  ? 'application/xml'
+       : contentType === 'html' ? 'text/html'
+       :                          'text/plain';
+}
+
 /** Default shape for Request.auth — covers all supported auth types */
 function defaultAuth() {
   return {

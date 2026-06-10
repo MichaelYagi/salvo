@@ -1,3 +1,63 @@
+// ─── Generic Confirm / Prompt Dialog ───────────────────────────────────────────
+
+let _dialogResolve = null;
+
+function showDialog({ title = '', message = '', input = false, value = '', okLabel = 'OK', danger = false }) {
+  return new Promise(resolve => {
+    _dialogResolve = resolve;
+
+    const titleEl = document.getElementById('dialog-title');
+    titleEl.textContent = title;
+    titleEl.style.display = title ? '' : 'none';
+
+    const msgEl = document.getElementById('dialog-message');
+    msgEl.textContent = message;
+    msgEl.style.display = message ? '' : 'none';
+
+    const inputEl = document.getElementById('dialog-input');
+    inputEl.style.display = input ? '' : 'none';
+    inputEl.value = value;
+
+    const okBtn = document.getElementById('dialog-ok-btn');
+    okBtn.textContent = okLabel;
+    okBtn.className = danger ? '' : 'btn-primary';
+    okBtn.style.color = danger ? 'var(--danger)' : '';
+
+    document.getElementById('dialog-modal').style.display = 'flex';
+
+    setTimeout(() => {
+      if (input) { inputEl.focus(); inputEl.select(); }
+      else       { okBtn.focus(); }
+    }, 0);
+  });
+}
+
+function closeDialog(result) {
+  document.getElementById('dialog-modal').style.display = 'none';
+  if (_dialogResolve) { _dialogResolve(result); _dialogResolve = null; }
+}
+
+function dialogCancel() {
+  const isPrompt = document.getElementById('dialog-input').style.display !== 'none';
+  closeDialog(isPrompt ? null : false);
+}
+
+function dialogConfirm() {
+  const inputEl   = document.getElementById('dialog-input');
+  const isPrompt  = inputEl.style.display !== 'none';
+  closeDialog(isPrompt ? inputEl.value : true);
+}
+
+// Resolves true/false — replacement for window.confirm().
+function confirmDialog(message, opts = {}) {
+  return showDialog({ message, input: false, okLabel: opts.okLabel || 'Confirm', danger: !!opts.danger });
+}
+
+// Resolves to the entered string, or null if cancelled — replacement for window.prompt().
+function promptDialog(message, value = '', opts = {}) {
+  return showDialog({ message, input: true, value, okLabel: opts.okLabel || 'OK' });
+}
+
 // ─── Environment Modal ────────────────────────────────────────────────────────
 
 function openEnvModal() {
@@ -79,8 +139,8 @@ function envUse() {
   scheduleDiskSave();
 }
 
-function envDelete() {
-  if (!confirm('Delete this environment?')) return;
+async function envDelete() {
+  if (!await confirmDialog('Delete this environment?', { okLabel: 'Delete', danger: true })) return;
   state.envs     = state.envs.filter(e => e.id !== state.envSelId);
   state.envSelId = 'default';
   renderEnvModal();
@@ -147,7 +207,7 @@ async function deleteCookie(i) {
 }
 
 async function clearAllCookies() {
-  if (!confirm('Delete all stored cookies?')) return;
+  if (!await confirmDialog('Delete all stored cookies?', { okLabel: 'Delete', danger: true })) return;
   await fetch('/api/cookies', {
     method:  'DELETE',
     headers: { 'Content-Type': 'application/json' },

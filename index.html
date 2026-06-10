@@ -107,7 +107,7 @@
           </select>
           <input id="url-input" type="text"
                  placeholder="https://api.example.com/endpoint {{var}}"
-                 oninput="activeTab().req.url=this.value;scheduleAutoSave();renderReqPanel()"
+                 oninput="activeTab().req.url=this.value;syncParamsFromUrl();scheduleAutoSave();updateTabBadges();renderReqPanel()"
                  onkeydown="if(event.key==='Enter')sendRequest()">
           <button id="send-btn" class="btn-primary" onclick="sendRequest()">Send</button>
         </div>
@@ -187,6 +187,20 @@
     <div class="modal-footer">
       <button onclick="clearAllCookies()" style="color:var(--danger)">Clear All</button>
       <button class="btn-primary" onclick="closeCookiesModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Generic Confirm / Prompt Dialog ───────────────────────────────────── -->
+<div id="dialog-modal" class="modal-bg" style="display:none" onclick="if(event.target===this)dialogCancel()">
+  <div class="modal dialog-modal" onclick="event.stopPropagation()">
+    <h3 id="dialog-title" style="display:none"></h3>
+    <p id="dialog-message" style="display:none"></p>
+    <input id="dialog-input" type="text" style="display:none"
+           onkeydown="if(event.key==='Enter')dialogConfirm(); else if(event.key==='Escape')dialogCancel()">
+    <div class="modal-footer">
+      <button id="dialog-cancel-btn" onclick="dialogCancel()">Cancel</button>
+      <button id="dialog-ok-btn" class="btn-primary" onclick="dialogConfirm()">OK</button>
     </div>
   </div>
 </div>
