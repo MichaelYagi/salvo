@@ -13,6 +13,20 @@ const ROOT      = __dirname;
 const DATA_DIR  = process.env.SALVO_DATA_DIR || path.join(ROOT, 'data');
 const SALVO_DIR = path.join(DATA_DIR, '_salvo');
 const PORT      = process.env.PORT || 8080;
+const LOG_DIR   = process.env.SALVO_LOG_DIR || path.join(ROOT, 'logs');
+const LOG_FILE  = path.join(LOG_DIR, 'salvo.log');
+
+// ─── Logging ────────────────────────────────────────────────────────────────────
+// Writes to the CLI (console) and appends to logs/salvo.log (gitignored).
+function log(level, message) {
+  const line = `[${new Date().toISOString()}] [${level}] ${message}`;
+  if (level === 'ERROR') console.error(line);
+  else console.log(line);
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.appendFileSync(LOG_FILE, line + '\n');
+  } catch {}
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -176,7 +190,12 @@ function saveData(payload) {
 
 // ─── HTTP server ────────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
+  const start = Date.now();
   const u = new URL(req.url, `http://${req.headers.host}`);
+
+  res.on('finish', () => {
+    log('INFO', `${req.method} ${u.pathname} ${res.statusCode} ${Date.now() - start}ms`);
+  });
 
   if (u.pathname === '/api/data' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -193,6 +212,7 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       } catch (err) {
+        log('ERROR', `save failed: ${err.message}`);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: err.message }));
       }
@@ -257,6 +277,7 @@ const server = http.createServer((req, res) => {
           elapsed,
         }));
       } catch (err) {
+        log('ERROR', `proxy ${method} ${url} failed: ${err.message}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: err.message }));
       }
@@ -279,10 +300,10 @@ const server = http.createServer((req, res) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, () => console.log(`Salvo running at http://localhost:${PORT}`));
+  server.listen(PORT, () => log('INFO', `Salvo running at http://localhost:${PORT}`));
 }
 
 module.exports = {
   sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server,
-  parseDigestChallenge, buildDigestHeader,
+  parseDigestChallenge, buildDigestHeader, log,
 };

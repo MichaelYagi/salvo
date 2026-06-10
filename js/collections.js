@@ -255,11 +255,11 @@ function deleteReqs(ids) {
 
 // ─── Backup export / import (all collections, as plain JSON) ──────────────────
 
-// Exports every collection (requests + folders, no envs/history) as a single
+// Exports every collection (requests + folders) and environment as a single
 // JSON file that can be re-imported via importAny() — by this Salvo instance
 // or shared with a team and merged into theirs.
 function exportAll() {
-  const payload = { cols: clone(state.cols) };
+  const payload = { cols: clone(state.cols), envs: clone(state.envs) };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
@@ -267,9 +267,27 @@ function exportAll() {
   a.click();
 }
 
-// Merge a { cols } payload into the current state. Existing collections/folders
-// are matched by name; requests with a name that already exists in the matching
-// collection/folder are skipped.
+// Merge a list of [key, value] vars into an environment matched by name,
+// creating it if it doesn't exist. Existing keys are left untouched.
+function mergeEnvVars(envName, pairs) {
+  let env = state.envs.find(e => e.name === envName);
+  if (!env) {
+    env = { id: uid(), name: envName, vars: {} };
+    state.envs.push(env);
+  }
+  let added = 0;
+  pairs.forEach(([k, v]) => {
+    if (!k || k in env.vars) return;
+    env.vars[k] = v ?? '';
+    added++;
+  });
+  return { envName: env.name, added };
+}
+
+// Merge a { cols, envs } payload into the current state. Existing collections/
+// folders are matched by name; requests with a name that already exists in the
+// matching collection/folder are skipped. Environments are matched by name and
+// merged var-by-var, leaving existing vars untouched.
 function mergeImportedData(data) {
   const importedCols = (data.cols || []).map(c => ({
     name:     c.name,
@@ -310,11 +328,24 @@ function mergeImportedData(data) {
     });
   });
 
+  let envsAdded = 0, varsAdded = 0;
+  (data.envs || []).forEach(ie => {
+    if (!ie || !ie.name) return;
+    const existed = state.envs.some(e => e.name === ie.name);
+    const { added: va } = mergeEnvVars(ie.name, Object.entries(ie.vars || {}));
+    if (!existed) envsAdded++;
+    varsAdded += va;
+  });
+
   renderSidebar();
+  renderEnvSelect();
   scheduleDiskSave();
 
   const skippedMsg = skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}` : '';
-  notify(`Imported ${added} request${added === 1 ? '' : 's'}${skippedMsg}`, 'success');
+  const envMsg = (envsAdded || varsAdded)
+    ? `, ${envsAdded} new env${envsAdded === 1 ? '' : 's'} (${varsAdded} var${varsAdded === 1 ? '' : 's'})`
+    : '';
+  notify(`Imported ${added} request${added === 1 ? '' : 's'}${skippedMsg}${envMsg}`, 'success');
 }
 
 // Dispatches based on JSON shape: a Salvo export ({ cols }) is merged into the
@@ -333,11 +364,25 @@ async function importAny(event) {
       const col = parsePostman(data);
       state.cols.push(col);
       state.expandedCols.add(col.id);
+
+      let envMsg = '';
+      if (Array.isArray(data.variable) && data.variable.length) {
+        const { added } = mergeEnvVars(col.name, data.variable.map(v => [v.key, v.value]));
+        if (added) envMsg = `, ${added} env var${added === 1 ? '' : 's'}`;
+      }
+
       renderSidebar();
+      renderEnvSelect();
       scheduleDiskSave();
-      notify('Imported: ' + col.name, 'success');
+      notify('Imported: ' + col.name + envMsg, 'success');
+    } else if (data._postman_variable_scope === 'environment' && Array.isArray(data.values)) {
+      const pairs = data.values.filter(v => v.enabled !== false).map(v => [v.key, v.value]);
+      const { envName, added } = mergeEnvVars(data.name || 'Imported Environment', pairs);
+      renderEnvSelect();
+      scheduleDiskSave();
+      notify(`Imported environment "${envName}" (${added} var${added === 1 ? '' : 's'})`, 'success');
     } else {
-      throw new Error('Not a Salvo export or Postman collection');
+      throw new Error('Not a Salvo export, Postman collection, or Postman environment');
     }
   } catch (err) {
     notify('Import failed: ' + err.message, 'error');

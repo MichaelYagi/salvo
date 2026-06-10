@@ -45,6 +45,7 @@ function loadSandbox() {
   // since `const`/`let` bindings aren't reflected on the context's global object.
   vm.runInContext(`
     function renderSidebar() {}
+    function renderEnvSelect() {}
     function scheduleDiskSave() {}
     globalThis.state = state;
   `, sandbox, { filename: 'stubs.js' });
