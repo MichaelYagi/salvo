@@ -8,7 +8,7 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 
 - **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format.
 - **Full request editing** — method, URL, query params, headers, auth (Bearer, Basic, API Key), and body (raw JSON/XML/text, form-data, x-www-form-urlencoded)
-- **Environment variables** — define `{{variable}}` placeholders and swap between environments (dev, staging, prod, etc.)
+- **Environment variables** — `{{variable}}` placeholders are resolved from the active environment when sending. (The environment switcher/editor UI is currently hidden in the topbar, but the underlying data and `data/_salvo/envs.json` still work.)
 - **Response viewer** — status, timing, size, collapsible JSON tree, raw body, response headers. Large JSON responses (>1MB) fall back to raw text to avoid freezing the tab.
 - **cURL tab** — live curl equivalent for every request, updates as you type, one-click copy
 - **Notes on params/headers** — annotate individual rows ("Dev key", "pagination cursor", etc.)
@@ -94,6 +94,20 @@ The **Export** button (topbar) downloads a `salvo-export.json` containing all co
 The **Import** button accepts either:
 - A Salvo export (`{ "cols": [...] }`) — merged into your existing collections, matching by collection/folder name and skipping any request whose name already exists
 - A Postman v2.x collection — added as a new collection
+
+## Tests
+
+```bash
+node --test
+```
+
+Runs the test suite with Node's built-in test runner — no dependencies needed (Node 18+). Covers:
+
+- `test/server.test.js` — `sanitizeName`/`uniqueName`, `buildColsFromFiles`, and the `saveData`/`loadData` round trip against a temporary data directory (the real `data/` is never touched)
+- `test/server-http.test.js` — `/api/data`, `/api/save`, `/api/proxy` (raw, formdata, urlencoded bodies, and unreachable upstreams), and static file serving, against a real server instance
+- `test/collections.test.js` — `parsePostman` and `mergeImportedData`, run in a sandboxed copy of the global-scope frontend JS
+
+Run `node --test --experimental-test-coverage` for a coverage report (covers `server.js`; the sandboxed frontend tests aren't included in coverage instrumentation).
 
 ## No build step
 

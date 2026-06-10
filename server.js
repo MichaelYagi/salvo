@@ -9,7 +9,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const ROOT      = __dirname;
-const DATA_DIR  = path.join(ROOT, 'data');
+const DATA_DIR  = process.env.SALVO_DATA_DIR || path.join(ROOT, 'data');
 const SALVO_DIR = path.join(DATA_DIR, '_salvo');
 const PORT      = process.env.PORT || 8080;
 
@@ -33,11 +33,6 @@ function uniqueName(base, used) {
   while (used.has(name.toLowerCase())) name = `${base} (${i++})`;
   used.add(name.toLowerCase());
   return name;
-}
-
-function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch { return fallback; }
 }
 
 // ─── Build {cols, envs, hist} from a flat list of {path, content} files ───────
@@ -192,7 +187,7 @@ const server = http.createServer((req, res) => {
           fetchBody = new FormData();
           (reqBody || []).forEach(({ key, value }) => fetchBody.append(key, value));
         } else if (bodyKind === 'urlencoded') {
-          fetchBody = new URLSearchParams(reqBody || []);
+          fetchBody = new URLSearchParams((reqBody || []).map(({ key, value }) => [key, value]));
         }
 
         const start    = Date.now();
@@ -238,4 +233,8 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Salvo running at http://localhost:${PORT}`));
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Salvo running at http://localhost:${PORT}`));
+}
+
+module.exports = { sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server };
