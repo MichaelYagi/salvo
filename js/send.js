@@ -339,6 +339,17 @@ function buildPmApi(req, resp) {
         env.vars = env.vars.filter(v => v.key !== key);
       },
     },
+    globals: {
+      get: key => state.globals.find(v => v.key === key && v.enabled)?.value,
+      set: (key, value) => {
+        const existing = state.globals.find(v => v.key === key);
+        if (existing) existing.value = String(value);
+        else state.globals.push({ id: uid(), key, value: String(value), enabled: true });
+      },
+      unset: key => {
+        state.globals = state.globals.filter(v => v.key !== key);
+      },
+    },
     test(name, fn) {
       try {
         fn();

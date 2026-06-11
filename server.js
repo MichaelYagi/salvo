@@ -245,10 +245,14 @@ function loadData() {
   let tabsData = {};
   try { tabsData = JSON.parse(fs.readFileSync(path.join(SALVO_DIR, 'tabs.json'), 'utf8')); } catch {}
 
+  let globals = [];
+  try { globals = JSON.parse(fs.readFileSync(path.join(SALVO_DIR, 'globals.json'), 'utf8')); } catch {}
+
   return {
     cols,
     envs: normalizeEnvs(list?.length ? list : [{ id: 'default', name: 'No Environment', vars: [] }]),
     activeEnv,
+    globals: normalizeEnvs([{ id: '__globals__', name: 'Globals', vars: globals }])[0].vars,
     hist: hist || [],
     openTabs:    Array.isArray(tabsData.openTabs) ? tabsData.openTabs : [],
     activeIndex: typeof tabsData.activeIndex === 'number' ? tabsData.activeIndex : -1,
@@ -259,6 +263,7 @@ function loadData() {
 function saveData(payload) {
   const cols      = Array.isArray(payload.cols) ? payload.cols : [];
   const envs      = Array.isArray(payload.envs) ? payload.envs : [];
+  const globals   = Array.isArray(payload.globals) ? payload.globals : [];
   const hist      = Array.isArray(payload.hist) ? payload.hist : [];
   const activeEnv = payload.activeEnv || 'default';
   const openTabs  = Array.isArray(payload.openTabs) ? payload.openTabs : [];
@@ -296,6 +301,7 @@ function saveData(payload) {
 
   fs.mkdirSync(SALVO_DIR, { recursive: true });
   fs.writeFileSync(path.join(SALVO_DIR, 'envs.json'),    JSON.stringify({ activeEnv, list: envs }, null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'globals.json'), JSON.stringify(globals, null, 2));
   fs.writeFileSync(path.join(SALVO_DIR, 'history.json'), JSON.stringify(hist.slice(-200), null, 2));
   fs.writeFileSync(path.join(SALVO_DIR, 'tabs.json'),    JSON.stringify({ openTabs, activeIndex }, null, 2));
 }

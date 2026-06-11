@@ -162,7 +162,7 @@ function folderHTML(colId, folder) {
   const open = state.expandedFolders.has(folder.id);
 
   let html = `
-    <div class="folder-header" onclick="toggleFolder('${folder.id}')">
+    <div class="folder-header" onclick="toggleFolder('${folder.id}')" oncontextmenu="folderCtx(event,'${colId}','${folder.id}')">
       <span class="col-arrow ${open ? 'open' : ''}">&#9654;</span>
       <span style="font-size:13px">&#128193;</span>
       <span class="folder-name">${esc(folder.name)}</span>
@@ -214,11 +214,23 @@ function colCtx(event, colId) {
     { label: 'New Request',       action: () => addReq(colId) },
     { label: 'New Folder',        action: () => addFolder(colId) },
     'sep',
+    { label: 'Run Collection',    action: () => runCollection(colId) },
+    'sep',
     { label: 'Rename',            action: () => renameCol(colId) },
     { label: 'Export JSON',       action: () => exportCol(colId) },
     { label: 'Export as Postman', action: () => exportColAsPostman(colId) },
     'sep',
     { label: 'Delete Collection', action: () => deleteCol(colId), danger: true },
+  ]);
+}
+
+function folderCtx(event, colId, folderId) {
+  event.preventDefault();
+  event.stopPropagation();
+  showCtxMenu(event.clientX, event.clientY, [
+    { label: 'New Request', action: () => addReq(colId, folderId) },
+    'sep',
+    { label: 'Run Folder',  action: () => runFolder(colId, folderId) },
   ]);
 }
 

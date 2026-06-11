@@ -263,7 +263,9 @@ function kvHeaderBlur() {
 
 function getEnvVarNames() {
   const env = state.envs.find(e => e.id === state.activeEnv);
-  return (env?.vars || []).filter(v => v.enabled && v.key).map(v => v.key);
+  const envNames    = (env?.vars || []).filter(v => v.enabled && v.key).map(v => v.key);
+  const globalNames = state.globals.filter(v => v.enabled && v.key).map(v => v.key);
+  return [...new Set([...envNames, ...globalNames])];
 }
 
 // If the cursor sits inside an unclosed `{{...}}`, return { start, prefix } —
@@ -544,6 +546,18 @@ function kvEditorHTML(rows, key) {
     : null;
   let html = '';
 
+  const bulkMode = state.bulkEdit.has(key);
+  html += `<div class="kv-bulk-bar">
+    <button class="kv-bulk-toggle" onclick="toggleBulkEdit('${key}')">${bulkMode ? 'Form Edit' : 'Bulk Edit'}</button>
+  </div>`;
+
+  if (bulkMode) {
+    html += `<textarea class="kv-bulk-textarea"
+        placeholder="name: value&#10;// disabledName: value"
+        oninput="applyBulkEdit('${key}',this.value)">${esc(kvRowsToBulkText(rows))}</textarea>`;
+    return html + kvComputedSectionsHTML(key);
+  }
+
   rows.forEach((row, i) => {
     const op = row.enabled ? 1 : .45;
     const conflict = authHeaderKeys && row.enabled && row.key && authHeaderKeys.has(row.key.toLowerCase());
@@ -581,8 +595,16 @@ function kvEditorHTML(rows, key) {
       </div>`;
   });
 
-  const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : key === 'envVars' ? 'variable' : 'field';
+  const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : key === 'envVars' || key === 'globalVars' ? 'variable' : 'field';
   html += `<button class="kv-add" onclick="kvAdd('${key}')">+ Add ${addLabel}</button>`;
+
+  return html + kvComputedSectionsHTML(key);
+}
+
+// Renders the read-only "Path Variables" (params) and "Auto-generated" (headers)
+// sections, shared between the row editor and bulk-edit textarea views.
+function kvComputedSectionsHTML(key) {
+  let html = '';
 
   if (key === 'params') {
     const pathVars = activeTab().req.pathVars;
@@ -622,7 +644,8 @@ function kvEditorHTML(rows, key) {
 }
 
 function getKvTarget(key) {
-  if (key === 'envVars') return getSelEnv()?.vars;
+  if (key === 'envVars')    return getSelEnv()?.vars;
+  if (key === 'globalVars') return state.globals;
   const r = activeTab().req;
   if (key === 'params')   return r.params;
   if (key === 'headers')  return r.headers;
@@ -631,28 +654,69 @@ function getKvTarget(key) {
 
 function kvToggle(key, i, v) {
   getKvTarget(key)[i].enabled = v;
-  if (key === 'envVars') return scheduleDiskSave();
+  if (key === 'envVars' || key === 'globalVars') return scheduleDiskSave();
   if (key === 'params') syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges();
   if (activeTab().reqTab === 'curl') renderReqPanel();
 }
 function kvSet(key, i, field, v) {
   getKvTarget(key)[i][field] = v;
-  if (key === 'envVars') return scheduleDiskSave();
+  if (key === 'envVars' || key === 'globalVars') return scheduleDiskSave();
   if (key === 'params' && (field === 'key' || field === 'value')) syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges();
   if (activeTab().reqTab === 'curl') renderReqPanel();
 }
 function kvDel(key, i) {
   getKvTarget(key).splice(i, 1);
-  if (key === 'envVars') { scheduleDiskSave(); renderEnvDetail(); return; }
+  if (key === 'envVars' || key === 'globalVars') { scheduleDiskSave(); renderEnvDetail(); return; }
   if (key === 'params') syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges(); renderReqPanel();
 }
 function kvAdd(key) {
   getKvTarget(key).push({ id: uid(), key: '', value: '', enabled: true });
-  if (key === 'envVars') { scheduleDiskSave(); renderEnvDetail(); return; }
+  if (key === 'envVars' || key === 'globalVars') { scheduleDiskSave(); renderEnvDetail(); return; }
   scheduleAutoSave(); renderReqPanel();
+}
+
+// ─── Bulk Edit ─────────────────────────────────────────────────────────────────
+// Toggles a kv editor between its row-based form and a `key: value` textarea
+// (one per line, `// ` prefix = disabled). Switching back to form mode just
+// re-renders from the already-applied rows.
+
+function toggleBulkEdit(key) {
+  if (state.bulkEdit.has(key)) state.bulkEdit.delete(key);
+  else state.bulkEdit.add(key);
+  if (key === 'envVars' || key === 'globalVars') renderEnvDetail();
+  else renderReqPanel();
+}
+
+function kvRowsToBulkText(rows) {
+  return rows.map(r => `${r.enabled ? '' : '// '}${r.key}: ${r.value}`).join('\n');
+}
+
+function bulkTextToRows(text, oldRows) {
+  return text.split('\n').map(line => {
+    let l = line;
+    let enabled = true;
+    const commented = l.match(/^\s*\/\/\s?(.*)$/);
+    if (commented) { enabled = false; l = commented[1]; }
+    const idx = l.indexOf(':');
+    const key   = (idx === -1 ? l : l.slice(0, idx)).trim();
+    const value = (idx === -1 ? '' : l.slice(idx + 1)).trim();
+    if (!key) return null;
+    const old = oldRows.find(r => r.key === key);
+    return { id: old?.id ?? uid(), key, value, enabled, note: old?.note ?? '' };
+  }).filter(Boolean);
+}
+
+function applyBulkEdit(key, text) {
+  const target = getKvTarget(key);
+  const rows = bulkTextToRows(text, target);
+  target.length = 0;
+  target.push(...rows);
+  if (key === 'envVars' || key === 'globalVars') return scheduleDiskSave();
+  if (key === 'params') syncUrlFromParams();
+  scheduleAutoSave(); updateTabBadges();
 }
 
 // ─── Auth Editor ──────────────────────────────────────────────────────────────

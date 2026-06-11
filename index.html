@@ -192,6 +192,20 @@
   </div>
 </div>
 
+<!-- ── Collection Runner ─────────────────────────────────────────────────── -->
+<div id="runner-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)closeRunnerModal()">
+  <div class="modal runner-modal" onclick="event.stopPropagation()">
+    <h3 id="runner-title">Run Collection</h3>
+    <div id="runner-summary" class="muted" style="font-size:12px;margin-bottom:8px"></div>
+    <div id="runner-results" class="runner-results"></div>
+    <div class="modal-footer">
+      <button id="runner-stop-btn" onclick="stopRunner()" style="color:var(--danger)">Stop</button>
+      <button class="btn-primary" onclick="closeRunnerModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Generic Confirm / Prompt Dialog ───────────────────────────────────── -->
 <div id="dialog-modal" class="modal-bg" style="display:none" onclick="if(event.target===this)dialogCancel()">
   <div class="modal dialog-modal" onclick="event.stopPropagation()">
@@ -226,6 +240,7 @@
 <script src="js/send.js"></script>        <!-- fetch execution                   -->
 <script src="js/collections.js"></script> <!-- collection / folder / req CRUD    -->
 <script src="js/modals.js"></script>      <!-- environment modal                 -->
+<script src="js/runner.js"></script>      <!-- collection runner                 -->
 <script src="js/app.js"></script>         <!-- init, save, resizer, history      -->
 
 </body>

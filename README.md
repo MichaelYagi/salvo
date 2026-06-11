@@ -14,9 +14,12 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 - **Auto-generated headers preview** — the Headers tab shows a read-only "Auto-generated" section previewing the `Authorization`/API key header from the Auth tab, the `Content-Type` the Body tab will add, and any `Cookie` header the cookie jar will attach for this request's domain. A manual header that will be silently overridden by the Auth tab (e.g. a hand-typed `Authorization`) is highlighted with a warning.
 - **Auth** — Bearer Token, Basic Auth, API Key, OAuth 2.0 (Client Credentials & Password Grant), Digest Auth, and JWT Bearer (HS256)
 - **Environment variables** — `{{variable}}` placeholders are resolved from the active environment when sending. Switch environments from the topbar dropdown, or manage them via "Manage Env".
-- **`{{variable}}` autocomplete** — type `{{` in the URL bar, any params/headers/form-data row, the raw body editor, or an auth field, and a dropdown suggests matching variable names from the active environment. Filter by typing, navigate with the arrow keys, and accept with `Tab`/`Enter` (or click) to insert `{{varName}}`.
+- **Global variables** — a "Globals" section in "Manage Env" holds variables that are available no matter which environment is active. `{{variable}}` placeholders fall back to a global when the active environment doesn't define that variable, and `pm.globals.get/set/unset` works the same way as `pm.environment.*` in scripts.
+- **`{{variable}}` autocomplete** — type `{{` in the URL bar, any params/headers/form-data row, the raw body editor, or an auth field, and a dropdown suggests matching variable names from the active environment and globals. Filter by typing, navigate with the arrow keys, and accept with `Tab`/`Enter` (or click) to insert `{{varName}}`.
 - **Save response values as variables** — hover any value in the response's JSON tree and click `→{{}}` to save it straight into the active environment.
-- **Pre-request & test scripts** — run JavaScript before a request is sent or after its response arrives, via a small `pm`-style API. Extract values into environment variables, assert on the response with `pm.test`/`pm.expect`, and see pass/fail results in a "Tests" tab.
+- **Bulk edit** — click "Bulk Edit" above any params/headers/form-data/variables table to switch to a plain-text `name: value` editor (one per line, `// ` prefix to disable a row). Click "Form Edit" to switch back; edits are parsed back into rows, preserving each row's id/notes where the name matches.
+- **Pre-request & test scripts** — run JavaScript before a request is sent or after its response arrives, via a small `pm`-style API. Extract values into environment/global variables, assert on the response with `pm.test`/`pm.expect`, and see pass/fail results in a "Tests" tab.
+- **Collection Runner** — right-click a collection ("Run Collection") or a folder ("Run Folder") to send every request in it sequentially. Each request's pre-request/test scripts run as usual (sharing environment/global variables across the run, so values extracted by one request are available to the next), and results — status, timing, and test pass/fail counts — are shown live in a runner modal. Stop a run early with the "Stop" button.
 - **Cookie jar** — `Set-Cookie` responses are stored automatically and replayed on later requests to matching domains. View or clear stored cookies from the "Cookies" topbar button.
 - **Response viewer** — status, timing, size, collapsible JSON tree, raw body, response headers. Large JSON responses (>1MB) fall back to raw text to avoid freezing the tab.
 - **cURL tab** — live curl equivalent for every request, updates as you type, one-click copy
@@ -48,23 +51,27 @@ node server.js --port=3000
 ```
 salvo/
 ├── server.js               — stdlib-only Node server: static files + /api/data, /api/save, /api/proxy
-├── data/                    — gitignored; your collections, environments, and history (plain JSON)
+├── data/                    — gitignored; your collections, environments, history, and globals (plain JSON)
 ├── index.html               — markup only, no inline JS or CSS
 ├── css/
 │   ├── base.css            — reset, layout shell, form controls, buttons, tabs, spinner
+│   ├── themes.css          — Dark/Light/Nord theme variable sets
 │   ├── sidebar.css         — sidebar, resizer, collection/folder/request rows, context menu
-│   ├── request.css         — URL bar, KV editor, auth editor, body editor
+│   ├── request.css         — URL bar, KV editor, auth editor, body editor, bulk edit
 │   ├── response.css        — response panel, status badge, JSON tree, history panel
-│   └── modals.css          — modal backdrop, environment modal, toast notifications
+│   └── modals.css          — modal backdrop, environment modal, runner modal, toast notifications
 └── js/
     ├── state.js            — global state, auto-save scheduling, shared utilities
+    ├── theme.js            — color theme picker
+    ├── tabs.js             — open-request tab strip
     ├── sidebar.js          — sidebar rendering, search, context menus
     ├── curl.js             — curl command generation
-    ├── request.js          — request editor: tabs, KV/auth/body editors
+    ├── request.js          — request editor: tabs, KV/auth/body editors, bulk edit
     ├── response.js         — response panel rendering, DOM-based JSON tree
     ├── send.js             — request execution (via /api/proxy), response parsing
     ├── collections.js      — collection/folder/request CRUD, Postman & Salvo import/export
-    ├── modals.js           — environment modal
+    ├── modals.js           — environment & global variables modal
+    ├── runner.js           — Collection Runner (run a collection/folder, results modal)
     └── app.js              — init, sidebar resizer, history panel, save/load
 ```
 
@@ -77,7 +84,7 @@ All JS files share the global scope and load in order. `state.js` must be first 
 - **Collections are directories**: `data/<Collection Name>/`
 - **Requests are files**: `data/<Collection Name>/<Request Name>.json`
 - **Folders are not directories** — a request inside a Postman-style folder just has an extra `"folder": "<Folder Name>"` field; the layout on disk is always flat, one level deep.
-- **Environments, history, open tabs, and cookies**: `data/_salvo/envs.json`, `data/_salvo/history.json`, `data/_salvo/tabs.json`, and `data/_salvo/cookies.json`
+- **Environments, globals, history, open tabs, and cookies**: `data/_salvo/envs.json`, `data/_salvo/globals.json`, `data/_salvo/history.json`, `data/_salvo/tabs.json`, and `data/_salvo/cookies.json`
 
 ### Request shape
 
@@ -119,9 +126,17 @@ Use `{{variable}}` placeholders anywhere in a request's URL, params, headers, or
 
 `{{userId}}` would come from another environment variable, or you can leave params un-interpolated for ones you fill in per-request. Switching environments from the topbar dropdown instantly changes what every `{{...}}` placeholder resolves to — handy for flipping between dev/staging/prod without editing requests.
 
+### Global variables
+
+The **Globals** entry in **Manage Env** (above your list of environments) holds variables that aren't tied to any one environment. When a `{{variable}}` placeholder isn't found in the active environment, Salvo falls back to a matching global variable before leaving it un-interpolated. Use globals for values that are the same everywhere (an API key, a shared account id) so you don't have to duplicate them into every environment.
+
 ### Saving response values as variables
 
 After sending a request, expand the JSON tree in the response viewer and hover over any leaf value (string, number, boolean, null). A `→{{}}` button appears — click it to save that value into the active environment under a variable name you choose. The same thing can be done from a test script with `pm.environment.set(...)` (see below).
+
+## Bulk Edit
+
+Every params/headers/form-data/variables table has a **Bulk Edit** button above it. Click it to switch to a plain-text editor with one `name: value` pair per line — handy for pasting in a block of headers or query params at once. Prefix a line with `// ` to add it as a disabled row. Click **Form Edit** to switch back to the table view; rows are matched back to their previous id/notes by name where possible.
 
 ## Auth types
 
@@ -146,6 +161,7 @@ Each request has a **Scripts** tab with two editors: a **pre-request script**, r
 - `pm.environment.get(key)` — read a variable from the active environment
 - `pm.environment.set(key, value)` — create or update a variable in the active environment
 - `pm.environment.unset(key)` — remove a variable
+- `pm.globals.get(key)` / `pm.globals.set(key, value)` / `pm.globals.unset(key)` — same, but for [global variables](#global-variables)
 - `pm.response.status` / `pm.response.statusText` — response status (test scripts only)
 - `pm.response.headers` — response headers object (test scripts only)
 - `pm.response.responseTime` — elapsed time in ms (test scripts only)
@@ -180,6 +196,12 @@ pm.environment.set('userId', pm.response.json().id);
 
 Test results show up in a **Tests** tab in the response panel, with a pass/fail count badge. Scripts that throw outside of `pm.test()` (a syntax error, etc.) show up as a single failed test.
 
+## Collection Runner
+
+Right-click a collection and choose **Run Collection** (or right-click a folder and choose **Run Folder**) to send every request in it, one after another. Each request runs the same way it would from its tab — pre-request script, send, test script — except nothing happens in the UI; instead a runner modal shows live results: method, name, status (or error), response time, and a `passed/total tests` badge for any test scripts.
+
+Pre-request and test scripts share the same active environment and globals across the whole run, so a value extracted by `pm.environment.set(...)` (or `pm.globals.set(...)`) in one request's test script is available to later requests' pre-request scripts — useful for chains like "log in, then use the returned token for the rest of the requests in the collection". Click **Stop** to end the run after the current request finishes.
+
 ## Cookie Jar
 
 Salvo keeps a server-side cookie jar at `data/_salvo/cookies.json`. Whenever a response includes `Set-Cookie` headers, the cookies are parsed and stored automatically; on later requests, any stored cookie whose domain, path, expiry, and `Secure` flag match the request URL is sent back in the `Cookie` header — no manual copying of session cookies between requests.
@@ -208,9 +230,10 @@ node --test
 
 Runs the test suite with Node's built-in test runner — no dependencies needed (Node 18+). Covers:
 
-- `test/server.test.js` — `sanitizeName`/`uniqueName`, `buildColsFromFiles`, and the `saveData`/`loadData` round trip against a temporary data directory (the real `data/` is never touched)
+- `test/server.test.js` — `sanitizeName`/`uniqueName`, `buildColsFromFiles`, and the `saveData`/`loadData` round trip (including `globals.json`) against a temporary data directory (the real `data/` is never touched)
 - `test/server-http.test.js` — `/api/data`, `/api/save`, `/api/proxy` (raw, formdata, urlencoded bodies, and unreachable upstreams), and static file serving, against a real server instance
 - `test/collections.test.js` — `parsePostman` and `mergeImportedData`, run in a sandboxed copy of the global-scope frontend JS
+- `test/request.test.js` — path variables, computed-headers preview, the KV editor (including bulk edit), `{{variable}}` autocomplete (including global variable fallback), run in a sandboxed copy of the global-scope frontend JS
 
 Run `node --test --experimental-test-coverage` for a coverage report (covers `server.js`; the sandboxed frontend tests aren't included in coverage instrumentation).
 

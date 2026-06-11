@@ -86,6 +86,9 @@ function renderEnvModal() {
 function renderEnvList() {
   const listEl = document.getElementById('env-list-panel');
   listEl.innerHTML =
+    `<div class="env-item ${state.envSelId === '__globals__' ? 'active' : ''}" onclick="envSelect('__globals__')">
+       Globals
+     </div>` +
     state.envs.map(e => `
       <div class="env-item ${e.id === state.envSelId ? 'active' : ''}" onclick="envSelect('${e.id}')">
         ${esc(e.name)}
@@ -99,6 +102,15 @@ function renderEnvList() {
 
 function renderEnvDetail() {
   const detailEl = document.getElementById('env-detail-panel');
+
+  if (state.envSelId === '__globals__') {
+    detailEl.innerHTML = `<p class="muted" style="margin:0 0 12px;font-size:12px">
+        Global variables are available in every environment, and are used as a
+        fallback when a <code>{{variable}}</code> isn't found in the active environment.
+      </p>` + kvEditorHTML(state.globals, 'globalVars');
+    return;
+  }
+
   const env = state.envs.find(e => e.id === state.envSelId);
   if (!env) { detailEl.innerHTML = ''; return; }
 

@@ -92,6 +92,7 @@ test('saveData + loadData round trip preserves collections, folders, envs, and h
     },
   ];
   const envs = [{ id: 'default', name: 'No Environment', vars: [{ id: 'v1', key: 'baseUrl', value: 'http://localhost', enabled: true }] }];
+  const globals = [{ id: 'g1', key: 'apiKey', value: 'secret', enabled: true }];
   const hist = [{ method: 'GET', url: '/users', status: 200, elapsed: 10 }];
   const activeEnv = 'default';
   const openTabs = [
@@ -100,7 +101,7 @@ test('saveData + loadData round trip preserves collections, folders, envs, and h
   ];
   const activeIndex = 1;
 
-  saveData({ cols, envs, activeEnv, hist, openTabs, activeIndex });
+  saveData({ cols, envs, activeEnv, globals, hist, openTabs, activeIndex });
 
   // On-disk layout: flat <Collection>/<Request>.json, folder requests get a "folder" field, ids stripped
   assert.ok(fs.existsSync(path.join(DATA_DIR, 'Demo', 'Get Users.json')));
@@ -118,6 +119,7 @@ test('saveData + loadData round trip preserves collections, folders, envs, and h
   assert.strictEqual(loaded.cols[0].folders[0].requests[0].name, 'Create User');
   assert.deepStrictEqual(loaded.envs, envs);
   assert.strictEqual(loaded.activeEnv, activeEnv);
+  assert.deepStrictEqual(loaded.globals, globals);
   assert.deepStrictEqual(loaded.hist, hist);
   assert.deepStrictEqual(loaded.openTabs, openTabs);
   assert.strictEqual(loaded.activeIndex, activeIndex);
@@ -130,6 +132,14 @@ test('loadData defaults openTabs/activeIndex when tabs.json is absent', () => {
   const loaded = loadData();
   assert.deepStrictEqual(loaded.openTabs, []);
   assert.strictEqual(loaded.activeIndex, -1);
+});
+
+test('loadData defaults globals to [] when globals.json is absent', () => {
+  resetData();
+  saveData({ cols: [], envs: [], hist: [] });
+
+  const loaded = loadData();
+  assert.deepStrictEqual(loaded.globals, []);
 });
 
 test('saveData removes deleted collection directories and de-duplicates request file names', () => {

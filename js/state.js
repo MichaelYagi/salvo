@@ -20,6 +20,7 @@ const state = {
   cols:      [],
   envs:      [{ id: 'default', name: 'No Environment', vars: [] }],
   activeEnv: 'default',
+  globals:   [],
   hist:      [],
 
   tabs:            [],     // open request tabs — see js/tabs.js
@@ -30,6 +31,8 @@ const state = {
   envSelId:        'default',
   selectedReqIds:  new Set(),
   lastSelReqId:    null,
+  bulkEdit:        new Set(), // kv editor keys ('params'|'headers'|'formData'|'envVars'|'globalVars') currently in bulk-edit mode
+  runner:          null,      // Collection Runner progress/results — see js/runner.js
 };
 
 // ─── Auto-sync working request back into state.cols, then auto-save to disk ───
@@ -107,13 +110,15 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
-/** Interpolate {{variable}} placeholders using the active environment */
+/** Interpolate {{variable}} placeholders using the active environment, falling back to globals */
 function interp(s) {
   if (!s) return s;
   const vars = state.envs.find(e => e.id === state.activeEnv)?.vars ?? [];
   return s.replace(/\{\{(\w+)\}\}/g, (_, k) => {
     const row = vars.find(v => v.key === k && v.enabled);
-    return row ? row.value : `{{${k}}}`;
+    if (row) return row.value;
+    const global = state.globals.find(v => v.key === k && v.enabled);
+    return global ? global.value : `{{${k}}}`;
   });
 }
 

@@ -33,6 +33,7 @@ async function loadData() {
 
   state.envs      = data.envs?.length ? data.envs : [{ id: 'default', name: 'No Environment', vars: [] }];
   state.activeEnv = data.activeEnv || 'default';
+  state.globals   = data.globals || [];
   state.hist      = data.hist || [];
 
   state.expandedCols = new Set(state.cols.map(c => c.id));
@@ -76,7 +77,7 @@ async function saveAll(silent = false) {
     const res = await fetch('/api/save', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ cols: state.cols, envs: state.envs, activeEnv: state.activeEnv, hist: state.hist, openTabs: serializeOpenTabs(), activeIndex: activeOpenTabIndex() }),
+      body:    JSON.stringify({ cols: state.cols, envs: state.envs, activeEnv: state.activeEnv, globals: state.globals, hist: state.hist, openTabs: serializeOpenTabs(), activeIndex: activeOpenTabIndex() }),
     });
     const data = await res.json();
     if (data.ok) {
@@ -135,7 +136,7 @@ async function init() {
   window.addEventListener('beforeunload', () => {
     clearTimeout(_diskSaveTimer);
     syncAllTabsIntoCols();
-    const payload = JSON.stringify({ cols: state.cols, envs: state.envs, activeEnv: state.activeEnv, hist: state.hist, openTabs: serializeOpenTabs(), activeIndex: activeOpenTabIndex() });
+    const payload = JSON.stringify({ cols: state.cols, envs: state.envs, activeEnv: state.activeEnv, globals: state.globals, hist: state.hist, openTabs: serializeOpenTabs(), activeIndex: activeOpenTabIndex() });
     navigator.sendBeacon('/api/save', new Blob([payload], { type: 'application/json' }));
   });
 }

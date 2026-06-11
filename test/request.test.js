@@ -280,6 +280,22 @@ test('getEnvVarNames returns enabled var keys from the active environment', () =
   assert.deepEqual(sandbox.getEnvVarNames(), ['baseUrl', 'token']);
 });
 
+test('getEnvVarNames includes enabled global variable keys, deduped against env vars', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [
+      { id: '1', key: 'baseUrl', value: 'https://x', enabled: true },
+    ],
+  });
+  sandbox.state.activeEnv = 'env1';
+  sandbox.state.globals.push(
+    { id: 'g1', key: 'baseUrl', value: 'https://global', enabled: true },
+    { id: 'g2', key: 'apiKey', value: 'secret', enabled: true },
+    { id: 'g3', key: 'disabled', value: 'x', enabled: false },
+  );
+  assert.deepEqual(sandbox.getEnvVarNames(), ['baseUrl', 'apiKey']);
+});
+
 test('showVarSuggest populates the dropdown with matching env var names', () => {
   const sandbox = loadSandboxWithSuggestBox();
   sandbox.state.envs.push({
@@ -338,4 +354,80 @@ test('varSuggestKeydown accepts the active suggestion on Tab', () => {
   assert.strictEqual(handled, true);
   assert.strictEqual(prevented, true);
   assert.strictEqual(input.value, '{{baseUrl}}');
+});
+
+// ─── Global Variables ────────────────────────────────────────────────────────
+
+test('interp falls back to globals when no active-environment var matches', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [{ id: '1', key: 'baseUrl', value: 'https://env', enabled: true }],
+  });
+  sandbox.state.activeEnv = 'env1';
+  sandbox.state.globals.push(
+    { id: 'g1', key: 'baseUrl', value: 'https://global', enabled: true },
+    { id: 'g2', key: 'apiKey', value: 'secret', enabled: true },
+    { id: 'g3', key: 'disabled', value: 'x', enabled: false },
+  );
+
+  // Env var wins over a same-named global.
+  assert.strictEqual(sandbox.interp('{{baseUrl}}'), 'https://env');
+  // Falls back to a global when no env var matches.
+  assert.strictEqual(sandbox.interp('{{apiKey}}'), 'secret');
+  // A disabled global is not used.
+  assert.strictEqual(sandbox.interp('{{disabled}}'), '{{disabled}}');
+  // Unknown var left as-is.
+  assert.strictEqual(sandbox.interp('{{nope}}'), '{{nope}}');
+});
+
+// ─── Bulk Edit ────────────────────────────────────────────────────────────────
+
+test('kvRowsToBulkText renders one "key: value" line per row, prefixing disabled rows with "// "', () => {
+  const sandbox = loadSandbox();
+  const text = sandbox.kvRowsToBulkText([
+    { id: '1', key: 'a', value: '1', enabled: true },
+    { id: '2', key: 'b', value: '2', enabled: false },
+  ]);
+  assert.strictEqual(text, 'a: 1\n// b: 2');
+});
+
+test('bulkTextToRows parses "key: value" lines, "// " disables a row, and preserves ids/notes by key', () => {
+  const sandbox = loadSandbox();
+  const oldRows = [{ id: 'old-a', key: 'a', value: '1', enabled: true, note: 'kept' }];
+  const rows = sandbox.bulkTextToRows('a: new-value\n// b: 2\n\nc:3', oldRows);
+
+  assert.deepEqual(rows, [
+    { id: 'old-a', key: 'a', value: 'new-value', enabled: true, note: 'kept' },
+    { id: rows[1].id, key: 'b', value: '2', enabled: false, note: '' },
+    { id: rows[2].id, key: 'c', value: '3', enabled: true, note: '' },
+  ]);
+});
+
+test('applyBulkEdit replaces the kv target rows in place and re-syncs the URL for params', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ url: 'https://api.example.com', params: [{ id: '1', key: 'old', value: 'x', enabled: true }] });
+  sandbox.setActiveTab(makeTab(req));
+
+  sandbox.applyBulkEdit('params', 'q: search\n// debug: 1');
+
+  assert.deepEqual(req.params.map(r => ({ key: r.key, value: r.value, enabled: r.enabled })), [
+    { key: 'q', value: 'search', enabled: true },
+    { key: 'debug', value: '1', enabled: false },
+  ]);
+  assert.strictEqual(req.url, 'https://api.example.com?q=search');
+});
+
+test('toggleBulkEdit and kvEditorHTML render a textarea in bulk mode', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ headers: [{ id: '1', key: 'X-Test', value: 'abc', enabled: true, note: '' }] });
+  sandbox.setActiveTab(makeTab(req));
+
+  let html = sandbox.kvEditorHTML(req.headers, 'headers');
+  assert.match(html, /Bulk Edit/);
+  assert.doesNotMatch(html, /<textarea/);
+
+  sandbox.state.bulkEdit.add('headers');
+  html = sandbox.kvEditorHTML(req.headers, 'headers');
+  assert.match(html, /Form Edit/);
+  assert.match(html, /<textarea[^>]*>X-Test: abc<\/textarea>/);
 });
