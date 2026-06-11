@@ -54,9 +54,12 @@ function loadSandbox() {
 
 function makeReq(overrides = {}) {
   return {
-    url: '', params: [], pathVars: [], headers: [],
+    url: '', params: [], pathVars: [], headers: [], method: 'GET',
     body: { type: 'none', raw: '', formData: [] },
     auth: { type: 'none', token: '', username: '', password: '', apiKey: '', apiValue: '', cachedToken: '', jwtSecret: '' },
+    description: '', comments: [],
+    mock: { enabled: false, status: 200, headers: [], body: '', delay: 0 },
+    examples: [],
     ...overrides,
   };
 }
@@ -200,6 +203,177 @@ test('kvEditorHTML does not flag a disabled header that shadows an Auth header',
   assert.doesNotMatch(html, /kv-conflict/);
 });
 
+// ─── Form-data file rows ─────────────────────────────────────────────────────
+
+test('kvEditorHTML renders a type select and file picker for form-data rows', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({
+    body: { type: 'formdata', raw: '', formData: [
+      { id: '1', key: 'name', value: 'salvo', enabled: true, type: 'text' },
+      { id: '2', key: 'upload', enabled: true, type: 'file', fileName: 'a.txt', fileSize: 10, fileMimeType: 'text/plain', fileData: 'aGVsbG8=' },
+    ] },
+  });
+  sandbox.setActiveTab(makeTab(req));
+
+  const html = sandbox.kvEditorHTML(req.body.formData, 'formData');
+  assert.match(html, /kv-grid-formdata/);
+  assert.match(html, /<option value="file" selected>File<\/option>/);
+  assert.match(html, /Choose File/);
+  assert.match(html, /a\.txt/);
+});
+
+test('kvFormDataTypeChange toggles a row between text and file, clearing the other shape', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({
+    body: { type: 'formdata', raw: '', formData: [{ id: '1', key: 'f', value: 'x', enabled: true, type: 'text' }] },
+  });
+  sandbox.setActiveTab({ ...makeTab(req), reqTab: 'body' });
+  sandbox.document.getElementById = () => makeMockEl();
+
+  sandbox.kvFormDataTypeChange(0, 'file');
+  assert.strictEqual(req.body.formData[0].type, 'file');
+  assert.strictEqual(req.body.formData[0].value, '');
+
+  sandbox.kvFormDataTypeChange(0, 'text');
+  assert.strictEqual(req.body.formData[0].type, 'text');
+  assert.strictEqual(req.body.formData[0].fileData, '');
+});
+
+test('kvAdd("formData") defaults new rows to type "text"', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ body: { type: 'formdata', raw: '', formData: [] } });
+  sandbox.setActiveTab({ ...makeTab(req), reqTab: 'body' });
+  sandbox.document.getElementById = () => makeMockEl();
+
+  sandbox.kvAdd('formData');
+  assert.strictEqual(req.body.formData.length, 1);
+  assert.strictEqual(req.body.formData[0].type, 'text');
+});
+
+// ─── Binary body type ────────────────────────────────────────────────────────
+
+test('bodyHTML renders a file picker for the binary body type and computedBodyHeaders adds its Content-Type', () => {
+  const sandbox = loadSandbox();
+  const body = { type: 'binary', raw: '', formData: [], fileName: 'data.bin', fileSize: 1536, binaryMimeType: 'application/octet-stream', fileData: 'AAA=' };
+  const req = makeReq({ body });
+  sandbox.setActiveTab(makeTab(req));
+
+  const html = sandbox.bodyHTML(body);
+  assert.match(html, /Choose File/);
+  assert.match(html, /data\.bin/);
+  assert.match(html, /1\.5 KB/);
+  assert.match(html, /Content-Type:.*application\/octet-stream/);
+
+  assert.deepEqual(sandbox.computedBodyHeaders(req), [{ key: 'Content-Type', value: 'application/octet-stream' }]);
+});
+
+// ─── Mock server path extraction & per-request mock config ──────────────────
+
+test('extractMockPath strips {{var}} prefixes, protocol/host, and query strings', () => {
+  const sandbox = loadSandbox();
+  assert.strictEqual(sandbox.extractMockPath('{{baseUrl}}/users/:id?x=1'), '/users/:id');
+  assert.strictEqual(sandbox.extractMockPath('https://api.example.com/users/:id'), '/users/:id');
+  assert.strictEqual(sandbox.extractMockPath('users/:id'), '/users/:id');
+  assert.strictEqual(sandbox.extractMockPath(''), '/');
+});
+
+test('mockHTML renders the enable toggle, matched route, and mockSet updates req.mock', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ method: 'GET', url: 'https://api.example.com/ping' });
+  sandbox.setActiveTab({ ...makeTab(req), reqTab: 'mock' });
+  sandbox.document.getElementById = () => makeMockEl();
+
+  let html = sandbox.mockHTML(req);
+  assert.match(html, /Enable mock response/);
+  assert.match(html, /GET \/ping/);
+
+  sandbox.mockSet('enabled', true);
+  assert.strictEqual(req.mock.enabled, true);
+
+  sandbox.mockSet('status', 201);
+  assert.strictEqual(req.mock.status, 201);
+
+  sandbox.mockSet('body', '{"ok":true}');
+  assert.strictEqual(req.mock.body, '{"ok":true}');
+
+  html = sandbox.mockHTML(req);
+  assert.match(html, /value="201"/);
+});
+
+// ─── Docs & Comments ──────────────────────────────────────────────────────────
+
+test('docsHTML renders the description textarea and comments, addComment/deleteComment update req.comments', () => {
+  const sandbox = loadSandbox();
+  sandbox.localStorage = { getItem: () => '', setItem: () => {} };
+  const req = makeReq({ description: 'Fetches the ping endpoint' });
+  sandbox.setActiveTab(makeTab(req));
+
+  let html = sandbox.docsHTML(req);
+  assert.match(html, /Fetches the ping endpoint/);
+  assert.match(html, /No comments yet/);
+
+  sandbox.setActiveTab({ ...makeTab(req), reqTab: 'docs' });
+  sandbox.document.getElementById = id => {
+    if (id === 'comment-text-input')   return { value: 'Looks good' };
+    if (id === 'comment-author-input') return { value: 'Alice' };
+    return makeMockEl();
+  };
+  sandbox.addComment();
+  assert.strictEqual(req.comments.length, 1);
+  assert.strictEqual(req.comments[0].author, 'Alice');
+  assert.strictEqual(req.comments[0].text, 'Looks good');
+
+  html = sandbox.docsHTML(req);
+  assert.match(html, /Alice/);
+  assert.match(html, /Looks good/);
+
+  sandbox.deleteComment(req.comments[0].id);
+  assert.strictEqual(req.comments.length, 0);
+});
+
+// ─── Saved Response Examples ─────────────────────────────────────────────────
+
+test('examplesHTML lists saved examples and deleteExample removes one', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ examples: [
+    { id: 'ex1', name: 'Success', status: 200, statusText: 'OK', headers: {}, body: '{}', bodyType: 'json', createdAt: Date.now() },
+  ] });
+  sandbox.setActiveTab({ ...makeTab(req), reqTab: 'examples' });
+  sandbox.document.getElementById = () => makeMockEl();
+
+  let html = sandbox.examplesHTML(req);
+  assert.match(html, /Success/);
+  assert.match(html, /200 OK/);
+
+  sandbox.deleteExample('ex1');
+  assert.strictEqual(req.examples.length, 0);
+
+  html = sandbox.examplesHTML(req);
+  assert.match(html, /No saved examples yet/);
+});
+
+// ─── Tab badges ───────────────────────────────────────────────────────────────
+
+test('updateTabBadges shows badges for docs, examples, and an enabled mock', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({
+    description: 'has docs',
+    examples: [{ id: 'ex1', name: 'Ex', status: 200, headers: {}, body: '', createdAt: Date.now() }],
+    mock: { enabled: true, status: 200, headers: [], body: '', delay: 0 },
+  });
+  sandbox.setActiveTab({ req, reqTab: 'docs' });
+
+  const tabs = ['docs', 'examples', 'mock'].map(name => makeMockEl());
+  tabs.forEach((el, i) => { el.dataset = { tab: ['docs', 'examples', 'mock'][i] }; });
+  sandbox.document.querySelectorAll = () => tabs;
+
+  sandbox.updateTabBadges();
+
+  assert.match(tabs[0].innerHTML, /tab-badge/);   // docs: has description
+  assert.match(tabs[1].innerHTML, /tab-badge">1</); // examples: count
+  assert.match(tabs[2].innerHTML, /tab-badge">●/); // mock: enabled
+});
+
 // ─── {{variable}} autocomplete ──────────────────────────────────────────────
 
 function makeMockEl() {
@@ -212,6 +386,7 @@ function makeMockEl() {
       add: c => classes.add(c),
       remove: c => classes.delete(c),
       contains: c => classes.has(c),
+      toggle: (c, on) => { if (on) classes.add(c); else classes.delete(c); },
     },
     addEventListener() {},
     scrollIntoView() {},
@@ -378,6 +553,27 @@ test('interp falls back to globals when no active-environment var matches', () =
   assert.strictEqual(sandbox.interp('{{disabled}}'), '{{disabled}}');
   // Unknown var left as-is.
   assert.strictEqual(sandbox.interp('{{nope}}'), '{{nope}}');
+});
+
+test('interp prefers the Collection Runner\'s current data row over environment/global variables', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [{ id: '1', key: 'userId', value: 'env-user', enabled: true }],
+  });
+  sandbox.state.activeEnv = 'env1';
+  sandbox.state.globals.push({ id: 'g1', key: 'apiKey', value: 'global-key', enabled: true });
+
+  sandbox.state.runner = { currentRow: { userId: '42', name: 'Row Name' } };
+
+  // Row data wins over the active environment.
+  assert.strictEqual(sandbox.interp('{{userId}}'), '42');
+  // Falls back to globals for keys not present in the row.
+  assert.strictEqual(sandbox.interp('{{apiKey}}'), 'global-key');
+  // Row-only key resolves too.
+  assert.strictEqual(sandbox.interp('{{name}}'), 'Row Name');
+
+  sandbox.state.runner = null;
+  assert.strictEqual(sandbox.interp('{{userId}}'), 'env-user');
 });
 
 // ─── Bulk Edit ────────────────────────────────────────────────────────────────

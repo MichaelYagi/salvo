@@ -11,19 +11,26 @@ const crypto = require('crypto');
 const os     = require('os');
 
 // ─── CLI args ───────────────────────────────────────────────────────────────────
-// `node server.js --port=<port>` or `node server.js --port <port>`
-function getCliPort() {
+// `node server.js --<name>=<value>` or `node server.js --<name> <value>`
+function getCliArg(name) {
   const args = process.argv.slice(2);
+  const prefix = `--${name}=`;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg.startsWith('--port=')) return arg.slice('--port='.length);
-    if (arg === '--port')          return args[i + 1];
+    if (arg.startsWith(prefix)) return arg.slice(prefix.length);
+    if (arg === `--${name}`)    return args[i + 1];
   }
   return undefined;
 }
 
+function getCliPort() {
+  return getCliArg('port');
+}
+
 const ROOT      = __dirname;
-const DATA_DIR  = process.env.SALVO_DATA_DIR || path.join(ROOT, 'data');
+// --data-dir lets data/ point at a synced/shared folder (Dropbox, a git repo, a
+// network share, ...) so multiple machines/users can work from the same data.
+const DATA_DIR  = path.resolve(getCliArg('data-dir') || process.env.SALVO_DATA_DIR || path.join(ROOT, 'data'));
 const SALVO_DIR = path.join(DATA_DIR, '_salvo');
 const PORT      = getCliPort() || process.env.PORT || 5874;
 const LOG_DIR   = process.env.SALVO_LOG_DIR || path.join(ROOT, 'logs');
@@ -306,6 +313,84 @@ function saveData(payload) {
   fs.writeFileSync(path.join(SALVO_DIR, 'tabs.json'),    JSON.stringify({ openTabs, activeIndex }, null, 2));
 }
 
+// ─── Mock server ────────────────────────────────────────────────────────────────
+// A second, optional HTTP server that serves canned responses for requests
+// whose `mock.enabled` is true. Routes are { method, path, status, headers,
+// body, delay }, where `path` segments starting with `:` match any value
+// (mirroring Salvo's `:name` path variables).
+
+let mockServer = null;
+let mockState  = { port: null, routes: [] };
+
+function mockPathSegments(p) {
+  return String(p || '/').split('/').filter(Boolean);
+}
+
+function findMockMatch(routes, method, pathname) {
+  const segs = mockPathSegments(pathname);
+  return routes.find(r => {
+    if (String(r.method).toUpperCase() !== String(method).toUpperCase()) return false;
+    const rsegs = mockPathSegments(r.path);
+    if (rsegs.length !== segs.length) return false;
+    return rsegs.every((s, i) => s.startsWith(':') || s === segs[i]);
+  }) || null;
+}
+
+function createMockServer(routes) {
+  return http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://localhost');
+    const match = findMockMatch(routes, req.method, u.pathname);
+
+    if (!match) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `No mock route for ${req.method} ${u.pathname}` }));
+      return;
+    }
+
+    const send = () => {
+      const headers = {};
+      (match.headers || []).forEach(h => { if (h.key) headers[h.key] = h.value; });
+      if (!Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+        headers['Content-Type'] = 'application/json';
+      }
+      res.writeHead(match.status || 200, headers);
+      res.end(match.body || '');
+    };
+
+    if (match.delay > 0) setTimeout(send, match.delay);
+    else send();
+  });
+}
+
+function startMockServer(port, routes) {
+  return new Promise((resolve, reject) => {
+    if (mockServer) { reject(new Error('Mock server already running')); return; }
+    const srv = createMockServer(routes || []);
+    srv.once('error', reject);
+    srv.listen(port, () => {
+      mockServer = srv;
+      const actualPort = srv.address().port;
+      mockState  = { port: actualPort, routes: routes || [] };
+      resolve({ port: actualPort, routes: mockState.routes.length });
+    });
+  });
+}
+
+function stopMockServer() {
+  return new Promise(resolve => {
+    if (!mockServer) { resolve(); return; }
+    mockServer.close(() => {
+      mockServer = null;
+      mockState  = { port: null, routes: [] };
+      resolve();
+    });
+  });
+}
+
+function mockStatus() {
+  return { running: !!mockServer, port: mockState.port, routes: mockState.routes.length };
+}
+
 // ─── HTTP server ────────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   const start = Date.now();
@@ -365,6 +450,37 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (u.pathname === '/api/mock/status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, ...mockStatus() }));
+    return;
+  }
+
+  if (u.pathname === '/api/mock/start' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { port, routes } = JSON.parse(body || '{}');
+        const result = await startMockServer(Number(port), routes);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, ...result }));
+      } catch (err) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  if (u.pathname === '/api/mock/stop' && req.method === 'POST') {
+    stopMockServer().then(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    return;
+  }
+
   if (u.pathname === '/api/proxy' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -378,11 +494,22 @@ const server = http.createServer((req, res) => {
           if (bodyKind === 'raw') return reqBody;
           if (bodyKind === 'formdata') {
             const fd = new FormData();
-            (reqBody || []).forEach(({ key, value }) => fd.append(key, value));
+            (reqBody || []).forEach(entry => {
+              if (entry.type === 'file' && entry.fileData) {
+                const buf  = Buffer.from(entry.fileData, 'base64');
+                const blob = new Blob([buf], { type: entry.fileMimeType || 'application/octet-stream' });
+                fd.append(entry.key, blob, entry.fileName || 'file');
+              } else {
+                fd.append(entry.key, entry.value);
+              }
+            });
             return fd;
           }
           if (bodyKind === 'urlencoded') {
             return new URLSearchParams((reqBody || []).map(({ key, value }) => [key, value]));
+          }
+          if (bodyKind === 'binary') {
+            return reqBody?.fileData ? Buffer.from(reqBody.fileData, 'base64') : undefined;
           }
           return undefined;
         }
@@ -488,4 +615,6 @@ module.exports = {
   sanitizeName, uniqueName, buildColsFromFiles, walkDataDir, loadData, saveData, server,
   parseDigestChallenge, buildDigestHeader, normalizeEnvs, log,
   loadCookies, saveCookies, cookieMatches, parseSetCookie, updateJarCookie,
+  findMockMatch, createMockServer, startMockServer, stopMockServer, mockStatus,
+  getCliArg,
 };

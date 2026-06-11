@@ -156,7 +156,15 @@ async function buildRequestArgs(req) {
     bodyKind    = 'formdata';
     bodyPayload = req.body.formData
       .filter(f => f.enabled && f.key)
-      .map(f => ({ key: interp(f.key), value: interp(f.value) }));
+      .map(f => f.type === 'file'
+        ? { key: interp(f.key), type: 'file', fileName: f.fileName, fileData: f.fileData, fileMimeType: f.fileMimeType }
+        : { key: interp(f.key), value: interp(f.value) });
+  } else if (bt === 'binary') {
+    bodyKind    = 'binary';
+    bodyPayload = { fileName: req.body.fileName, fileData: req.body.fileData, fileMimeType: req.body.binaryMimeType };
+    if (!headers['Content-Type'] && !headers['content-type'] && req.body.binaryMimeType) {
+      headers['Content-Type'] = req.body.binaryMimeType;
+    }
   } else if (bt === 'urlencoded') {
     bodyKind    = 'urlencoded';
     bodyPayload = req.body.formData
@@ -349,6 +357,9 @@ function buildPmApi(req, resp) {
       unset: key => {
         state.globals = state.globals.filter(v => v.key !== key);
       },
+    },
+    iterationData: {
+      get: key => state.runner?.currentRow?.[key],
     },
     test(name, fn) {
       try {

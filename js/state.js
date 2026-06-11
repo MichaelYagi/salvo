@@ -101,6 +101,29 @@ function defaultAuth() {
   };
 }
 
+/** Default shape for Request.mock — a canned response served by the mock server */
+function defaultMock() {
+  return { enabled: false, status: 200, headers: [], body: '', delay: 0 };
+}
+
+/** Human-readable byte size, e.g. 1536 -> "1.5 KB" */
+function formatBytes(n) {
+  if (n == null) return '';
+  return n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
+}
+
+/** Extracts the path (with :pathVar segments preserved) from a request URL,
+ *  e.g. "{{baseUrl}}/users/:id?x=1" or "https://api.example.com/users/:id"
+ *  -> "/users/:id". Used to match requests to mock server routes. */
+function extractMockPath(url) {
+  let u = String(url || '').trim();
+  u = u.replace(/^\{\{[^}]+\}\}/, '');
+  const m = u.match(/^https?:\/\/[^/]+(\/.*)?$/i);
+  if (m) u = m[1] || '/';
+  else if (!u.startsWith('/')) u = '/' + u;
+  return u.split('?')[0] || '/';
+}
+
 /** HTML-escape a value for safe innerHTML insertion */
 function esc(s) {
   return String(s ?? '')
@@ -110,13 +133,17 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
-/** Interpolate {{variable}} placeholders using the active environment, falling back to globals */
+/** Interpolate {{variable}} placeholders — Collection Runner iteration data
+ *  (state.runner.currentRow) takes priority, then the active environment,
+ *  then globals. */
 function interp(s) {
   if (!s) return s;
+  const row  = state.runner?.currentRow;
   const vars = state.envs.find(e => e.id === state.activeEnv)?.vars ?? [];
   return s.replace(/\{\{(\w+)\}\}/g, (_, k) => {
-    const row = vars.find(v => v.key === k && v.enabled);
-    if (row) return row.value;
+    if (row && Object.prototype.hasOwnProperty.call(row, k)) return String(row[k]);
+    const envRow = vars.find(v => v.key === k && v.enabled);
+    if (envRow) return envRow.value;
     const global = state.globals.find(v => v.key === k && v.enabled);
     return global ? global.value : `{{${k}}}`;
   });

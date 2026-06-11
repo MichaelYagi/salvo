@@ -8,7 +8,7 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 
 - **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format.
 - **Multi-tab editing** — open several requests at once in browser-style tabs above the editor; each tab keeps its own edits, response, and active sub-tab.
-- **Full request editing** — method, URL, query params, headers, auth, and body (raw JSON/XML/text, form-data, x-www-form-urlencoded)
+- **Full request editing** — method, URL, query params, headers, auth, and body (raw JSON/XML/text, form-data with file uploads, x-www-form-urlencoded, raw binary)
 - **URL ↔ Params sync** — editing the URL's query string updates the Params table and vice versa, like Postman.
 - **Path variables** — `:name` segments in the URL (e.g. `/users/:id`) show up as an editable "Path Variables" table on the Params tab; the names come from the URL, you fill in the values, and they're substituted in when the request is sent (and in the cURL preview).
 - **Auto-generated headers preview** — the Headers tab shows a read-only "Auto-generated" section previewing the `Authorization`/API key header from the Auth tab, the `Content-Type` the Body tab will add, and any `Cookie` header the cookie jar will attach for this request's domain. A manual header that will be silently overridden by the Auth tab (e.g. a hand-typed `Authorization`) is highlighted with a warning.
@@ -19,7 +19,11 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 - **Save response values as variables** — hover any value in the response's JSON tree and click `→{{}}` to save it straight into the active environment.
 - **Bulk edit** — click "Bulk Edit" above any params/headers/form-data/variables table to switch to a plain-text `name: value` editor (one per line, `// ` prefix to disable a row). Click "Form Edit" to switch back; edits are parsed back into rows, preserving each row's id/notes where the name matches.
 - **Pre-request & test scripts** — run JavaScript before a request is sent or after its response arrives, via a small `pm`-style API. Extract values into environment/global variables, assert on the response with `pm.test`/`pm.expect`, and see pass/fail results in a "Tests" tab.
-- **Collection Runner** — right-click a collection ("Run Collection") or a folder ("Run Folder") to send every request in it sequentially. Each request's pre-request/test scripts run as usual (sharing environment/global variables across the run, so values extracted by one request are available to the next), and results — status, timing, and test pass/fail counts — are shown live in a runner modal. Stop a run early with the "Stop" button.
+- **Collection Runner** — right-click a collection ("Run Collection") or a folder ("Run Folder") to send every request in it sequentially. Each request's pre-request/test scripts run as usual (sharing environment/global variables across the run, so values extracted by one request are available to the next), and results — status, timing, and test pass/fail counts — are shown live in a runner modal. Optionally attach a CSV or JSON data file before starting a run to repeat the whole run once per row, with each row's columns available as `{{variables}}` and via `pm.iterationData.get(key)`. Stop a run early with the "Stop" button.
+- **Request & collection descriptions** — give any request or collection a free-text description (a request's "Docs" tab, or a collection's right-click "Edit Description") to document what it does for anyone else working in the same `data/` folder.
+- **Comments** — leave timestamped, named comments on a request from its "Docs" tab — handy for leaving notes for teammates sharing the same `data/` folder.
+- **Saved response Examples** — after sending a request, click "Save as Example" above the response body to snapshot its status/headers/body under a name. Saved examples live on the request's "Examples" tab — view one to load it back into the response viewer, or delete it.
+- **Mock servers** — enable "Mock" on a request (its "Mock" tab) to define a canned status/headers/body/delay, then start the local mock server (topbar → "Mock Server") to serve every enabled mock on a chosen port. Routes are matched by method and path, with `:name` path segments matching anything (mirroring a request's `{{baseUrl}}/users/:id`-style URL).
 - **Cookie jar** — `Set-Cookie` responses are stored automatically and replayed on later requests to matching domains. View or clear stored cookies from the "Cookies" topbar button.
 - **Response viewer** — status, timing, size, collapsible JSON tree, raw body, response headers. Large JSON responses (>1MB) fall back to raw text to avoid freezing the tab.
 - **cURL tab** — live curl equivalent for every request, updates as you type, one-click copy
@@ -46,6 +50,16 @@ To use a different port, pass `--port=<port>` (or set the `PORT` env var):
 node server.js --port=3000
 ```
 
+### Sharing `data/` (local-network sync)
+
+By default Salvo reads/writes `data/` next to `server.js`. Pass `--data-dir=<path>` (or set `SALVO_DATA_DIR`) to point it at a different folder — e.g. a Dropbox/Google Drive folder, a network share, or a separate git repo — so multiple machines or teammates can work from the same collections, environments, and history:
+
+```bash
+node server.js --data-dir=/path/to/shared/salvo-data
+```
+
+There's no real-time sync or accounts — it's the same wipe-and-rewrite-on-save model described below, just pointed at a folder that something else (Dropbox, a sync tool, git) keeps in sync between machines. Avoid running two instances against the same `data/` at the same time, since the last save wins.
+
 ## Project structure
 
 ```
@@ -71,7 +85,8 @@ salvo/
     ├── send.js             — request execution (via /api/proxy), response parsing
     ├── collections.js      — collection/folder/request CRUD, Postman & Salvo import/export
     ├── modals.js           — environment & global variables modal
-    ├── runner.js           — Collection Runner (run a collection/folder, results modal)
+    ├── runner.js           — Collection Runner (run a collection/folder, CSV/JSON data files, results modal)
+    ├── mock.js             — Mock Server modal (build routes from requests with mocking enabled, start/stop)
     └── app.js              — init, sidebar resizer, history panel, save/load
 ```
 
@@ -93,6 +108,7 @@ All JS files share the global scope and load in order. `state.js` must be first 
   "name": "Get user",
   "method": "GET",
   "url": "https://api.example.com/users/:userId",
+  "description": "Fetches a single user by id.",
   "params":  [{ "id": "x", "key": "include", "value": "profile", "enabled": true, "note": "" }],
   "pathVars": [{ "id": "z", "key": "userId", "value": "123" }],
   "headers": [{ "id": "y", "key": "Authorization", "value": "Bearer {{token}}", "enabled": true, "note": "Dev key" }],
@@ -111,9 +127,39 @@ All JS files share the global scope and load in order. `state.js` must be first 
     "jwtSecret": "", "jwtPayload": "{\"sub\":\"user123\"}"
   },
   "preRequestScript": "pm.environment.set('timestamp', Date.now());",
-  "testScript": "pm.test('status is 200', () => pm.expect(pm.response.status).toBe(200));"
+  "testScript": "pm.test('status is 200', () => pm.expect(pm.response.status).toBe(200));",
+  "comments": [{ "id": "c1", "author": "Alice", "text": "Returns 404 for soft-deleted users.", "createdAt": 1718000000000 }],
+  "mock": { "enabled": false, "status": 200, "headers": [], "body": "{\"id\":123,\"name\":\"Ada\"}", "delay": 0 },
+  "examples": [{ "id": "e1", "name": "200 OK", "status": 200, "statusText": "OK", "headers": {}, "body": "{\"id\":123}", "bodyType": "json", "createdAt": 1718000000000 }]
 }
 ```
+
+Collections also carry a `"description"` field, set via right-click → "Edit Description" on a collection.
+
+A form-data body's `formData` rows can be files instead of plain text values, and a `"binary"` body type sends a raw file as the request body:
+
+```json
+{
+  "body": {
+    "type": "formdata",
+    "formData": [
+      { "id": "a", "key": "name",   "value": "salvo",  "enabled": true, "type": "text" },
+      { "id": "b", "key": "upload", "enabled": true,   "type": "file", "fileName": "photo.png", "fileSize": 12345, "fileMimeType": "image/png", "fileData": "<base64>" }
+    ]
+  }
+}
+```
+
+```json
+{
+  "body": {
+    "type": "binary",
+    "fileName": "report.pdf", "fileSize": 98765, "binaryMimeType": "application/pdf", "fileData": "<base64>"
+  }
+}
+```
+
+File contents (`fileData`) are stored as base64 in the request's saved JSON, sent to the server as part of `/api/proxy`'s body, and reassembled into a multipart `Blob`/raw `Buffer` server-side.
 
 ## Environment variables
 
@@ -202,6 +248,21 @@ Right-click a collection and choose **Run Collection** (or right-click a folder 
 
 Pre-request and test scripts share the same active environment and globals across the whole run, so a value extracted by `pm.environment.set(...)` (or `pm.globals.set(...)`) in one request's test script is available to later requests' pre-request scripts — useful for chains like "log in, then use the returned token for the rest of the requests in the collection". Click **Stop** to end the run after the current request finishes.
 
+### Data-driven runs (CSV/JSON)
+
+Before clicking **Start Run**, optionally choose a `.csv` or `.json` data file:
+
+- **CSV** — the first row is treated as headers; every other row becomes a data row, one column per header.
+- **JSON** — must be an array of objects; each object becomes a data row.
+
+When a data file is attached, the whole run repeats once per row. While a row is active, its columns take priority over environment/global variables for `{{variable}}` interpolation, and are also readable from scripts via `pm.iterationData.get('columnName')`. Each result in the runner modal is tagged with its iteration number when running with data.
+
+## Mock Server
+
+Any request can act as a mock: open its **Mock** tab, check **Enable mock response for this request**, and set a status code, headers, delay (ms), and a response body. The tab shows the method + path (derived from the request's URL — `{{var}}` prefixes, host, and query string are stripped, e.g. `{{baseUrl}}/users/:id?x=1` → `/users/:id`) that the mock server will answer for.
+
+Click **Mock Server** in the topbar to open the mock modal, which lists every request with mocking enabled across all collections. Pick a port (default `5875`) and click **Start** to launch a local HTTP server that answers each enabled mock at its method + path — `:name` path segments match any value, so `/users/:id` matches `/users/42`. Headers and body support `{{variable}}` interpolation against the active environment/globals. Click **Stop** to shut it down. Useful for developing a frontend against an API that doesn't exist yet, or for demoing without a live backend.
+
 ## Cookie Jar
 
 Salvo keeps a server-side cookie jar at `data/_salvo/cookies.json`. Whenever a response includes `Set-Cookie` headers, the cookies are parsed and stored automatically; on later requests, any stored cookie whose domain, path, expiry, and `Secure` flag match the request URL is sent back in the `Cookie` header — no manual copying of session cookies between requests.
@@ -230,10 +291,11 @@ node --test
 
 Runs the test suite with Node's built-in test runner — no dependencies needed (Node 18+). Covers:
 
-- `test/server.test.js` — `sanitizeName`/`uniqueName`, `buildColsFromFiles`, and the `saveData`/`loadData` round trip (including `globals.json`) against a temporary data directory (the real `data/` is never touched)
-- `test/server-http.test.js` — `/api/data`, `/api/save`, `/api/proxy` (raw, formdata, urlencoded bodies, and unreachable upstreams), and static file serving, against a real server instance
-- `test/collections.test.js` — `parsePostman` and `mergeImportedData`, run in a sandboxed copy of the global-scope frontend JS
-- `test/request.test.js` — path variables, computed-headers preview, the KV editor (including bulk edit), `{{variable}}` autocomplete (including global variable fallback), run in a sandboxed copy of the global-scope frontend JS
+- `test/server.test.js` — `sanitizeName`/`uniqueName`, `buildColsFromFiles`, the `saveData`/`loadData` round trip (including `globals.json`) against a temporary data directory (the real `data/` is never touched), `getCliArg` (`--data-dir`/`--port` parsing), and `findMockMatch`/`startMockServer`/`stopMockServer`/`mockStatus`
+- `test/server-http.test.js` — `/api/data`, `/api/save`, `/api/proxy` (raw, formdata including file uploads, urlencoded, binary bodies, and unreachable upstreams), `/api/mock/start`/`/api/mock/status`/`/api/mock/stop`, and static file serving, against a real server instance
+- `test/collections.test.js` — `parsePostman` and `mergeImportedData` (including collection descriptions) and `normalizeReq`'s defaults for description/comments/mock/examples, run in a sandboxed copy of the global-scope frontend JS
+- `test/request.test.js` — path variables, computed-headers preview, the KV editor (including bulk edit and form-data file rows), the binary body type, `{{variable}}` autocomplete (including global variable fallback and Collection Runner row data), `extractMockPath`, and the Docs/Examples/Mock tabs and badges, run in a sandboxed copy of the global-scope frontend JS
+- `test/runner.test.js` — Collection Runner CSV/JSON data file parsing (`parseCsv`, `parseCsvLine`, `parseRunnerDataFile`), run in a sandboxed copy of the global-scope frontend JS
 
 Run `node --test --experimental-test-coverage` for a coverage report (covers `server.js`; the sandboxed frontend tests aren't included in coverage instrumentation).
 

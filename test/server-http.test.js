@@ -185,6 +185,83 @@ test('POST /api/proxy supports formdata and urlencoded request bodies', async ()
   }
 });
 
+test('POST /api/proxy supports a form-data file upload and a binary body', async () => {
+  const received = [];
+  const upstream = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      received.push({ contentType: req.headers['content-type'], body: Buffer.concat(chunks) });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{}');
+    });
+  });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = `http://127.0.0.1:${upstream.address().port}/`;
+
+  try {
+    const fileData = Buffer.from('hello file').toString('base64');
+    const fileRes = await fetch(`${base}/api/proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: upstreamUrl, method: 'POST', headers: {},
+        bodyKind: 'formdata',
+        body: [{ key: 'upload', type: 'file', fileName: 'a.txt', fileMimeType: 'text/plain', fileData }],
+      }),
+    });
+    assert.strictEqual((await fileRes.json()).ok, true);
+    assert.match(received[0].contentType, /multipart\/form-data/);
+    const formBody = received[0].body.toString('utf8');
+    assert.match(formBody, /name="upload"; filename="a\.txt"/);
+    assert.match(formBody, /hello file/);
+
+    const binaryData = Buffer.from('binary payload').toString('base64');
+    const binaryRes = await fetch(`${base}/api/proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: upstreamUrl, method: 'POST', headers: {},
+        bodyKind: 'binary',
+        body: { fileName: 'data.bin', fileMimeType: 'application/octet-stream', fileData: binaryData },
+      }),
+    });
+    assert.strictEqual((await binaryRes.json()).ok, true);
+    assert.strictEqual(received[1].body.toString('utf8'), 'binary payload');
+  } finally {
+    upstream.close();
+  }
+});
+
+test('GET/POST /api/mock/* starts, status-checks, and stops the local mock server', async () => {
+  const startRes = await fetch(`${base}/api/mock/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      port: 0,
+      routes: [{ method: 'GET', path: '/ping', status: 200, headers: [], body: '{"pong":true}', delay: 0 }],
+    }),
+  });
+  const start = await startRes.json();
+  assert.strictEqual(start.ok, true);
+  assert.strictEqual(start.routes, 1);
+  assert.ok(start.port > 0);
+
+  const statusRes = await fetch(`${base}/api/mock/status`);
+  const status = await statusRes.json();
+  assert.strictEqual(status.running, true);
+  assert.strictEqual(status.port, start.port);
+
+  const mockRes = await fetch(`http://127.0.0.1:${start.port}/ping`);
+  assert.deepStrictEqual(await mockRes.json(), { pong: true });
+
+  const stopRes = await fetch(`${base}/api/mock/stop`, { method: 'POST' });
+  assert.deepStrictEqual(await stopRes.json(), { ok: true });
+
+  const statusAfter = await (await fetch(`${base}/api/mock/status`)).json();
+  assert.strictEqual(statusAfter.running, false);
+});
+
 test('POST /api/proxy transparently answers a Digest auth challenge', async () => {
   const creds = { username: 'alice', password: 'secret' };
   const realm = 'testrealm@host.com';

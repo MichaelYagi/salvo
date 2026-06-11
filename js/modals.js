@@ -58,6 +58,33 @@ function promptDialog(message, value = '', opts = {}) {
   return showDialog({ message, input: true, value, okLabel: opts.okLabel || 'OK' });
 }
 
+// ─── Collection Info Modal ─────────────────────────────────────────────────────
+
+let _colInfoId = null;
+
+function openColInfoModal(colId) {
+  const col = state.cols.find(c => c.id === colId);
+  if (!col) return;
+  _colInfoId = colId;
+  document.getElementById('col-info-title').textContent = `${col.name} — Description`;
+  document.getElementById('col-info-desc').value = col.description || '';
+  document.getElementById('col-info-modal').style.display = 'flex';
+}
+
+function closeColInfoModal() {
+  document.getElementById('col-info-modal').style.display = 'none';
+  _colInfoId = null;
+}
+
+function saveColInfoModal() {
+  const col = state.cols.find(c => c.id === _colInfoId);
+  if (col) {
+    col.description = document.getElementById('col-info-desc').value;
+    scheduleDiskSave();
+  }
+  closeColInfoModal();
+}
+
 // ─── Environment Modal ────────────────────────────────────────────────────────
 
 function openEnvModal() {

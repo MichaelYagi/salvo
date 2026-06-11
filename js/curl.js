@@ -58,7 +58,9 @@ function buildCurl() {
   if (body.type === 'formdata') {
     body.formData
       .filter(f => f.enabled && f.key)
-      .forEach(f => parts.push(`-F '${f.key}=${f.value}'`));
+      .forEach(f => parts.push(f.type === 'file'
+        ? `-F '${f.key}=@${f.fileName || 'file'}'`
+        : `-F '${f.key}=${f.value}'`));
   }
   if (body.type === 'urlencoded') {
     const pairs = body.formData
@@ -66,6 +68,12 @@ function buildCurl() {
       .map(f => `${encodeURIComponent(f.key)}=${encodeURIComponent(f.value)}`)
       .join('&');
     if (pairs) parts.push(`--data-urlencode '${pairs}'`);
+  }
+  if (body.type === 'binary' && body.fileName) {
+    if (!r.headers.some(h => h.enabled && h.key.toLowerCase() === 'content-type') && body.binaryMimeType) {
+      parts.push(`-H 'Content-Type: ${body.binaryMimeType}'`);
+    }
+    parts.push(`--data-binary '@${body.fileName}'`);
   }
 
   // One flag per line for readability

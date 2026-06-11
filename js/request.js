@@ -66,6 +66,9 @@ function updateTabBadges() {
     if (name === 'params'  && pCount > 0) label += `<span class="tab-badge">${pCount}</span>`;
     if (name === 'headers' && hCount > 0) label += `<span class="tab-badge">${hCount}</span>`;
     if (name === 'scripts' && (tab.req.preRequestScript || tab.req.testScript)) label += `<span class="tab-badge">●</span>`;
+    if (name === 'docs'     && (tab.req.description || tab.req.comments.length)) label += `<span class="tab-badge">${tab.req.comments.length || '●'}</span>`;
+    if (name === 'examples' && tab.req.examples.length) label += `<span class="tab-badge">${tab.req.examples.length}</span>`;
+    if (name === 'mock'     && tab.req.mock.enabled) label += `<span class="tab-badge">●</span>`;
     t.innerHTML = label;
   });
 }
@@ -87,12 +90,15 @@ function renderReqPanel() {
   if (!tab) return;
 
   switch (tab.reqTab) {
-    case 'params':  el.innerHTML = kvEditorHTML(tab.req.params,  'params');  break;
-    case 'headers': el.innerHTML = kvEditorHTML(tab.req.headers, 'headers'); break;
-    case 'auth':    el.innerHTML = authHTML(tab.req.auth);                   break;
-    case 'body':    el.innerHTML = bodyHTML(tab.req.body);                   break;
-    case 'curl':    el.innerHTML = curlPanelHTML();                          break;
-    case 'scripts': el.innerHTML = scriptsHTML(tab.req);                     break;
+    case 'params':   el.innerHTML = kvEditorHTML(tab.req.params,  'params');  break;
+    case 'headers':  el.innerHTML = kvEditorHTML(tab.req.headers, 'headers'); break;
+    case 'auth':     el.innerHTML = authHTML(tab.req.auth);                   break;
+    case 'body':     el.innerHTML = bodyHTML(tab.req.body);                   break;
+    case 'curl':     el.innerHTML = curlPanelHTML();                          break;
+    case 'scripts':  el.innerHTML = scriptsHTML(tab.req);                     break;
+    case 'docs':     el.innerHTML = docsHTML(tab.req);                        break;
+    case 'examples': el.innerHTML = examplesHTML(tab.req);                    break;
+    case 'mock':     el.innerHTML = mockHTML(tab.req);                        break;
   }
 }
 
@@ -492,6 +498,7 @@ function computedBodyHeaders(req) {
   if (b.type === 'raw' && b.raw)  return [{ key: 'Content-Type', value: rawContentTypeHeader(b.contentType) }];
   if (b.type === 'formdata')      return [{ key: 'Content-Type', value: 'multipart/form-data; boundary=...' }];
   if (b.type === 'urlencoded')    return [{ key: 'Content-Type', value: 'application/x-www-form-urlencoded' }];
+  if (b.type === 'binary' && b.binaryMimeType) return [{ key: 'Content-Type', value: b.binaryMimeType }];
   return [];
 }
 
@@ -558,6 +565,8 @@ function kvEditorHTML(rows, key) {
     return html + kvComputedSectionsHTML(key);
   }
 
+  const isFormData = key === 'formData';
+
   rows.forEach((row, i) => {
     const op = row.enabled ? 1 : .45;
     const conflict = authHeaderKeys && row.enabled && row.key && authHeaderKeys.has(row.key.toLowerCase());
@@ -572,6 +581,37 @@ function kvEditorHTML(rows, key) {
     const varInput = field => key === 'headers'
       ? `if(!showVarSuggest(this))showHeaderSuggest(${i},'${field}')`
       : `showVarSuggest(this)`;
+
+    if (isFormData) {
+      const isFile = row.type === 'file';
+      html += `
+        <div class="kv-grid-formdata${conflict ? ' kv-conflict' : ''}">
+          <input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="kvToggle('${key}',${i},this.checked)">
+          <input value="${esc(row.key)}"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
+                 oninput="kvSet('${key}',${i},'key',this.value);showVarSuggest(this)"
+                 placeholder="name"
+                 style="opacity:${op}">
+          <select onchange="kvFormDataTypeChange(${i},this.value)" style="opacity:${op}">
+            <option value="text" ${!isFile ? 'selected' : ''}>Text</option>
+            <option value="file" ${isFile ? 'selected' : ''}>File</option>
+          </select>
+          ${isFile
+            ? `<div class="kv-file-cell" style="opacity:${op}">
+                 <input type="file" id="kv-formdata-file-${i}" style="display:none" onchange="kvFormDataFile(${i},this)">
+                 <button type="button" class="kv-file-btn" onclick="document.getElementById('kv-formdata-file-${i}').click()">Choose File</button>
+                 <span class="kv-file-name">${row.fileName ? esc(row.fileName) + (row.fileSize != null ? ` (${formatBytes(row.fileSize)})` : '') : 'No file selected'}</span>
+               </div>`
+            : `<input value="${esc(row.value)}"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
+                 oninput="kvSet('${key}',${i},'value',this.value);showVarSuggest(this)"
+                 placeholder="value"
+                 style="opacity:${op}">`}
+          <button class="kv-del" onclick="kvDel('${key}',${i})">×</button>
+        </div>`;
+      return;
+    }
+
     html += `
       <div class="${hasNotes ? 'kv-grid-notes' : 'kv-grid'}${conflict ? ' kv-conflict' : ''}"
            ${conflict ? `title="This header will be overridden by the Auth tab's ${esc(row.key)} value when the request is sent"` : ''}>
@@ -595,7 +635,7 @@ function kvEditorHTML(rows, key) {
       </div>`;
   });
 
-  const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : key === 'envVars' || key === 'globalVars' ? 'variable' : 'field';
+  const addLabel = key === 'params' ? 'query param' : (key === 'headers' || key === 'mockHeaders') ? 'header' : key === 'envVars' || key === 'globalVars' ? 'variable' : 'field';
   html += `<button class="kv-add" onclick="kvAdd('${key}')">+ Add ${addLabel}</button>`;
 
   return html + kvComputedSectionsHTML(key);
@@ -647,9 +687,10 @@ function getKvTarget(key) {
   if (key === 'envVars')    return getSelEnv()?.vars;
   if (key === 'globalVars') return state.globals;
   const r = activeTab().req;
-  if (key === 'params')   return r.params;
-  if (key === 'headers')  return r.headers;
-  if (key === 'formData') return r.body.formData;
+  if (key === 'params')      return r.params;
+  if (key === 'headers')     return r.headers;
+  if (key === 'formData')    return r.body.formData;
+  if (key === 'mockHeaders') return r.mock.headers;
 }
 
 function kvToggle(key, i, v) {
@@ -673,9 +714,39 @@ function kvDel(key, i) {
   scheduleAutoSave(); updateTabBadges(); renderReqPanel();
 }
 function kvAdd(key) {
-  getKvTarget(key).push({ id: uid(), key: '', value: '', enabled: true });
+  const row = { id: uid(), key: '', value: '', enabled: true };
+  if (key === 'formData') row.type = 'text';
+  getKvTarget(key).push(row);
   if (key === 'envVars' || key === 'globalVars') { scheduleDiskSave(); renderEnvDetail(); return; }
   scheduleAutoSave(); renderReqPanel();
+}
+
+// Switches a form-data row between a plain text value and a file upload.
+function kvFormDataTypeChange(i, type) {
+  const row = activeTab().req.body.formData[i];
+  row.type = type;
+  if (type === 'file') {
+    row.value = '';
+  } else {
+    row.fileName = ''; row.fileData = ''; row.fileSize = null; row.fileMimeType = '';
+  }
+  scheduleAutoSave(); renderReqPanel();
+}
+
+// Reads the chosen file as base64 and stashes it on the form-data row.
+function kvFormDataFile(i, input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const row = activeTab().req.body.formData[i];
+    row.fileName     = file.name;
+    row.fileSize     = file.size;
+    row.fileMimeType = file.type || 'application/octet-stream';
+    row.fileData     = String(reader.result).split(',')[1] || '';
+    scheduleAutoSave(); renderReqPanel();
+  };
+  reader.readAsDataURL(file);
 }
 
 // ─── Bulk Edit ─────────────────────────────────────────────────────────────────
@@ -872,8 +943,8 @@ function authSet(field, v) { activeTab().req.auth[field] = v; scheduleAutoSave()
 // ─── Body Editor ──────────────────────────────────────────────────────────────
 
 function bodyHTML(b) {
-  const types = ['none', 'raw', 'formdata', 'urlencoded'];
-  const labels = { none: 'none', raw: 'raw', formdata: 'form-data', urlencoded: 'x-www-form-urlencoded' };
+  const types = ['none', 'raw', 'formdata', 'urlencoded', 'binary'];
+  const labels = { none: 'none', raw: 'raw', formdata: 'form-data', urlencoded: 'x-www-form-urlencoded', binary: 'binary' };
 
   let html = `<div class="body-types">`;
 
@@ -901,6 +972,14 @@ function bodyHTML(b) {
   } else if (b.type === 'raw') {
     html += `<textarea id="body-raw-area" oninput="bodySet('raw',this.value);showVarSuggest(this)"
                onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()">${esc(b.raw)}</textarea>`;
+  } else if (b.type === 'binary') {
+    html += `
+      <div class="kv-file-cell">
+        <input type="file" id="body-binary-file" style="display:none" onchange="bodyBinaryFile(this)">
+        <button type="button" class="kv-file-btn" onclick="document.getElementById('body-binary-file').click()">Choose File</button>
+        <span class="kv-file-name">${b.fileName ? esc(b.fileName) + (b.fileSize != null ? ` (${formatBytes(b.fileSize)})` : '') : 'No file selected'}</span>
+      </div>
+      ${b.fileName ? `<p class="muted" style="margin-top:8px">Content-Type: <code>${esc(b.binaryMimeType || 'application/octet-stream')}</code></p>` : ''}`;
   } else {
     html += kvEditorHTML(b.formData, 'formData');
   }
@@ -910,6 +989,22 @@ function bodyHTML(b) {
 
 function bodyTypeChange(t) { activeTab().req.body.type = t; scheduleAutoSave(); renderReqPanel(); }
 function bodySet(field, v) { activeTab().req.body[field] = v; scheduleAutoSave(); }
+
+// Reads the chosen file as base64 for the "binary" body type.
+function bodyBinaryFile(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const b = activeTab().req.body;
+    b.fileName       = file.name;
+    b.fileSize       = file.size;
+    b.binaryMimeType = file.type || 'application/octet-stream';
+    b.fileData       = String(reader.result).split(',')[1] || '';
+    scheduleAutoSave(); renderReqPanel();
+  };
+  reader.readAsDataURL(file);
+}
 
 // ─── Scripts Editor (pre-request / test) ───────────────────────────────────────
 
@@ -943,4 +1038,155 @@ function scriptSet(field, v) {
   activeTab().req[field] = v;
   scheduleAutoSave();
   updateTabBadges();
+}
+
+// ─── Docs & Comments ────────────────────────────────────────────────────────────
+
+function docsHTML(req) {
+  const author = localStorage.getItem('salvo_comment_author') || '';
+
+  let html = `
+    <div class="docs-editor">
+      <h4>Description</h4>
+      <p class="muted">Notes about what this request does, shown to anyone working in this collection.</p>
+      <textarea class="docs-desc-area" placeholder="Describe what this request does..."
+                oninput="docsSetDescription(this.value)">${esc(req.description)}</textarea>
+
+      <h4 style="margin-top:16px">Comments</h4>
+      <div class="comments-list">`;
+
+  if (!req.comments.length) {
+    html += `<p class="muted">No comments yet.</p>`;
+  } else {
+    req.comments.forEach(c => {
+      html += `
+        <div class="comment-item">
+          <div class="comment-meta">
+            <span class="comment-author">${esc(c.author || 'Anonymous')}</span>
+            <span class="comment-date">${esc(new Date(c.createdAt).toLocaleString())}</span>
+            <button class="comment-del" onclick="deleteComment('${c.id}')">×</button>
+          </div>
+          <div class="comment-text">${esc(c.text)}</div>
+        </div>`;
+    });
+  }
+
+  html += `</div>
+      <div class="comment-add">
+        <input id="comment-author-input" placeholder="Your name" value="${esc(author)}" oninput="saveCommentAuthor(this.value)">
+        <textarea id="comment-text-input" placeholder="Add a comment..."></textarea>
+        <button class="btn-primary" onclick="addComment()">Add Comment</button>
+      </div>
+    </div>`;
+
+  return html;
+}
+
+function docsSetDescription(v) {
+  activeTab().req.description = v;
+  scheduleAutoSave();
+  updateTabBadges();
+}
+
+function saveCommentAuthor(v) {
+  localStorage.setItem('salvo_comment_author', v);
+}
+
+function addComment() {
+  const textEl = document.getElementById('comment-text-input');
+  const text = textEl.value.trim();
+  if (!text) return;
+  const author = document.getElementById('comment-author-input').value.trim() || 'Anonymous';
+  activeTab().req.comments.push({ id: uid(), author, text, createdAt: Date.now() });
+  scheduleAutoSave();
+  updateTabBadges();
+  renderReqPanel();
+}
+
+function deleteComment(id) {
+  const req = activeTab().req;
+  req.comments = req.comments.filter(c => c.id !== id);
+  scheduleAutoSave();
+  updateTabBadges();
+  renderReqPanel();
+}
+
+// ─── Saved Response Examples ───────────────────────────────────────────────────
+
+function examplesHTML(req) {
+  if (!req.examples.length) {
+    return `<p class="muted">No saved examples yet. Send a request, then click "Save as Example" above the response body.</p>`;
+  }
+
+  return `<div class="examples-list">` + req.examples.map(ex => {
+    const color = ex.status < 300 ? '#3fb950' : ex.status < 400 ? '#fca130' : '#f85149';
+    return `
+      <div class="example-item">
+        <span class="example-name">${esc(ex.name)}</span>
+        <span class="status-badge" style="background:${color}22;color:${color}">${esc(String(ex.status))} ${esc(ex.statusText || '')}</span>
+        <span class="example-date">${esc(new Date(ex.createdAt).toLocaleString())}</span>
+        <button onclick="viewExample('${ex.id}')">View</button>
+        <button class="comment-del" onclick="deleteExample('${ex.id}')">×</button>
+      </div>`;
+  }).join('') + `</div>`;
+}
+
+// Loads a saved example into the response panel for viewing.
+function viewExample(id) {
+  const tab = activeTab();
+  const ex = tab.req.examples.find(e => e.id === id);
+  if (!ex) return;
+  tab.resp = {
+    status: ex.status, statusText: ex.statusText, headers: ex.headers,
+    body: ex.body, bodyType: ex.bodyType, elapsed: 0, size: ex.body?.length ?? null,
+  };
+  tab.respTab = 'body';
+  document.querySelectorAll('[data-rtab]').forEach(t => t.classList.toggle('active', t.dataset.rtab === 'body'));
+  renderRespPanel();
+  notify(`Viewing example "${ex.name}"`, 'info');
+}
+
+function deleteExample(id) {
+  const req = activeTab().req;
+  req.examples = req.examples.filter(e => e.id !== id);
+  scheduleAutoSave();
+  updateTabBadges();
+  renderReqPanel();
+}
+
+// ─── Mock Response ──────────────────────────────────────────────────────────────
+
+function mockHTML(req) {
+  const m = req.mock;
+  return `
+    <div class="mock-editor">
+      <label class="mock-enable" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="mockSet('enabled',this.checked)">
+        Enable mock response for this request
+      </label>
+      <p class="muted">When the local mock server (topbar → "Mock Server") is running, it will answer
+        <strong>${esc(req.method)} ${esc(extractMockPath(req.url))}</strong> with the response below
+        instead of forwarding to a real server.</p>
+
+      <label>Status Code</label>
+      <input type="number" value="${m.status}" style="width:120px"
+             oninput="mockSet('status', parseInt(this.value,10) || 200)">
+
+      <label style="margin-top:12px">Headers</label>
+      ${kvEditorHTML(m.headers, 'mockHeaders')}
+
+      <label style="margin-top:12px">Delay (ms)</label>
+      <input type="number" value="${m.delay}" min="0" style="width:120px"
+             oninput="mockSet('delay', parseInt(this.value,10) || 0)">
+
+      <label style="margin-top:12px">Body</label>
+      <textarea id="mock-body-area" oninput="mockSet('body',this.value)">${esc(m.body)}</textarea>
+    </div>`;
+}
+
+function mockSet(field, v) {
+  activeTab().req.mock[field] = v;
+  scheduleAutoSave();
+  updateTabBadges();
+  if (field === 'enabled') renderReqPanel();
 }

@@ -14,7 +14,7 @@ const path = require('path');
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'salvo-test-'));
 process.env.SALVO_DATA_DIR = DATA_DIR;
 
-const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, normalizeEnvs, parseDigestChallenge, buildDigestHeader, parseSetCookie, cookieMatches, updateJarCookie, loadCookies, saveCookies } = require('../server.js');
+const { sanitizeName, uniqueName, buildColsFromFiles, loadData, saveData, normalizeEnvs, parseDigestChallenge, buildDigestHeader, parseSetCookie, cookieMatches, updateJarCookie, loadCookies, saveCookies, getCliArg, findMockMatch, startMockServer, stopMockServer, mockStatus } = require('../server.js');
 
 function resetData() {
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
@@ -249,6 +249,53 @@ test('saveCookies + loadCookies round trip', () => {
   const jar = loadCookies();
   assert.strictEqual(jar.length, 1);
   assert.strictEqual(jar[0].name, 'a');
+});
+
+// ─── CLI args ───────────────────────────────────────────────────────────────────
+
+test('getCliArg parses --name=value and --name value forms', () => {
+  const origArgv = process.argv;
+  try {
+    process.argv = [...origArgv.slice(0, 2), '--data-dir=/tmp/shared', '--port', '3000'];
+    assert.strictEqual(getCliArg('data-dir'), '/tmp/shared');
+    assert.strictEqual(getCliArg('port'), '3000');
+    assert.strictEqual(getCliArg('missing'), undefined);
+  } finally {
+    process.argv = origArgv;
+  }
+});
+
+// ─── Mock server ──────────────────────────────────────────────────────────────
+
+test('findMockMatch matches method and :param path segments', () => {
+  const routes = [
+    { method: 'GET', path: '/users/:id', status: 200, body: '{"ok":true}' },
+    { method: 'POST', path: '/users', status: 201, body: '{}' },
+  ];
+
+  assert.deepEqual(findMockMatch(routes, 'GET', '/users/42'), routes[0]);
+  assert.strictEqual(findMockMatch(routes, 'GET', '/users/42/orders'), null);
+  assert.deepEqual(findMockMatch(routes, 'POST', '/users'), routes[1]);
+  assert.strictEqual(findMockMatch(routes, 'DELETE', '/users/42'), null);
+});
+
+test('startMockServer/stopMockServer/mockStatus round trip and serve a route', async () => {
+  assert.deepEqual(mockStatus(), { running: false, port: null, routes: 0 });
+
+  const routes = [{ method: 'GET', path: '/ping', status: 200, headers: [{ key: 'X-Mock', value: '1' }], body: '{"pong":true}', delay: 0 }];
+  const { port } = await startMockServer(0, routes);
+  assert.deepEqual(mockStatus(), { running: true, port, routes: 1 });
+
+  const res = await fetch(`http://127.0.0.1:${port}/ping`);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.headers.get('x-mock'), '1');
+  assert.deepEqual(await res.json(), { pong: true });
+
+  const missing = await fetch(`http://127.0.0.1:${port}/nope`);
+  assert.strictEqual(missing.status, 404);
+
+  await stopMockServer();
+  assert.deepEqual(mockStatus(), { running: false, port: null, routes: 0 });
 });
 
 test.after(() => {

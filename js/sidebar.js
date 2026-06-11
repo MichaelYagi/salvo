@@ -216,6 +216,7 @@ function colCtx(event, colId) {
     'sep',
     { label: 'Run Collection',    action: () => runCollection(colId) },
     'sep',
+    { label: 'Edit Description',  action: () => openColInfoModal(colId) },
     { label: 'Rename',            action: () => renameCol(colId) },
     { label: 'Export JSON',       action: () => exportCol(colId) },
     { label: 'Export as Postman', action: () => exportColAsPostman(colId) },

@@ -38,7 +38,7 @@ function selectReq(id) {
 // ─── Collection CRUD ──────────────────────────────────────────────────────────
 
 function addCollection() {
-  const col = { id: uid(), name: 'New Collection', folders: [], requests: [] };
+  const col = { id: uid(), name: 'New Collection', description: '', folders: [], requests: [] };
   state.cols.push(col);
   state.expandedCols.add(col.id);
   renderSidebar();
@@ -166,6 +166,10 @@ function newRequestTemplate() {
     auth:    defaultAuth(),
     preRequestScript: '',
     testScript:       '',
+    description: '',
+    comments: [],
+    mock: defaultMock(),
+    examples: [],
   };
 }
 
@@ -317,6 +321,7 @@ function mergeEnvVars(envName, pairs) {
 function mergeImportedData(data) {
   const importedCols = (data.cols || []).map(c => ({
     name:     c.name,
+    description: c.description || '',
     requests: (c.requests || []).map(normalizeReq),
     folders:  (c.folders  || []).map(f => ({
       name:     f.name,
@@ -329,7 +334,7 @@ function mergeImportedData(data) {
   importedCols.forEach(ic => {
     let col = state.cols.find(c => c.name === ic.name);
     if (!col) {
-      col = { id: uid(), name: ic.name, requests: [], folders: [] };
+      col = { id: uid(), name: ic.name, description: ic.description || '', requests: [], folders: [] };
       state.cols.push(col);
     }
     state.expandedCols.add(col.id);
@@ -482,6 +487,7 @@ function parsePostman(data) {
       name:    item.name || 'Untitled',
       method:  (r.method || 'GET').toUpperCase(),
       url, headers, params, body, auth,
+      description: typeof item.request?.description === 'string' ? item.request.description : (item.description || ''),
     };
   }
 
@@ -490,6 +496,7 @@ function parsePostman(data) {
   return {
     id:   uid(),
     name: data.info?.name || 'Imported Collection',
+    description: data.info?.description || '',
     folders,
     requests,
   };

@@ -57,7 +57,7 @@ test('parsePostman converts a Postman v2.1 collection into Salvo shape', () => {
   const sandbox = loadSandbox();
 
   const postman = {
-    info: { name: 'My API', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+    info: { name: 'My API', description: 'A demo API', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
     item: [
       {
         name: 'List Widgets',
@@ -85,6 +85,7 @@ test('parsePostman converts a Postman v2.1 collection into Salvo shape', () => {
   const col = sandbox.parsePostman(postman);
 
   assert.strictEqual(col.name, 'My API');
+  assert.strictEqual(col.description, 'A demo API');
   assert.strictEqual(col.requests.length, 1);
   assert.strictEqual(col.requests[0].name, 'List Widgets');
   assert.strictEqual(col.requests[0].method, 'GET');
@@ -142,4 +143,46 @@ test('mergeImportedData merges into existing collections and creates new ones, s
   assert.strictEqual(brandNew.folders.length, 1);
   assert.strictEqual(brandNew.folders[0].name, 'Sub');
   assert.strictEqual(brandNew.folders[0].requests[0].name, 'Nested Request');
+});
+
+test('mergeImportedData carries over collection descriptions for new collections only', () => {
+  const sandbox = loadSandbox();
+
+  sandbox.state.cols = [
+    { id: 'col-1', name: 'Demo', description: 'Existing description', folders: [], requests: [] },
+  ];
+
+  sandbox.mergeImportedData({
+    cols: [
+      { name: 'Demo', description: 'Imported description', requests: [], folders: [] },
+      { name: 'New Collection', description: 'Brand new', requests: [], folders: [] },
+    ],
+  });
+
+  const demo = sandbox.state.cols.find(c => c.name === 'Demo');
+  assert.strictEqual(demo.description, 'Existing description', 'an existing collection\'s description should not be overwritten by import');
+
+  const fresh = sandbox.state.cols.find(c => c.name === 'New Collection');
+  assert.strictEqual(fresh.description, 'Brand new');
+});
+
+test('normalizeReq defaults description, comments, mock, and examples for older saved requests', () => {
+  const sandbox = loadSandbox();
+
+  const normalized = sandbox.normalizeReq({ name: 'Old Request', method: 'get', url: '/old' });
+  assert.strictEqual(normalized.description, '');
+  assert.deepEqual(normalized.comments, []);
+  assert.deepEqual(normalized.mock, { enabled: false, status: 200, headers: [], body: '', delay: 0 });
+  assert.deepEqual(normalized.examples, []);
+
+  const withSaved = sandbox.normalizeReq({
+    name: 'New Request', method: 'get', url: '/new',
+    description: 'desc', comments: [{ id: 'c1', author: 'Bob', text: 'hi', createdAt: 1 }],
+    mock: { enabled: true, status: 201 },
+    examples: [{ id: 'e1', name: 'Ex' }],
+  });
+  assert.strictEqual(withSaved.description, 'desc');
+  assert.strictEqual(withSaved.comments.length, 1);
+  assert.deepEqual(withSaved.mock, { enabled: true, status: 201, headers: [], body: '', delay: 0 });
+  assert.strictEqual(withSaved.examples.length, 1);
 });

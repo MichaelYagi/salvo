@@ -16,6 +16,7 @@ function renderRespPanel() {
   const timeEl  = document.getElementById('resp-time');
   const sizeEl  = document.getElementById('resp-size');
   const copyBtn = document.getElementById('copy-resp-btn');
+  const exBtn   = document.getElementById('save-example-btn');
   const tab     = activeTab();
   const resp    = tab?.resp;
 
@@ -24,6 +25,7 @@ function renderRespPanel() {
   // Nothing sent yet
   if (!resp) {
     wrap.innerHTML = `<span class="muted">Press Send to execute the request</span>`;
+    exBtn.style.display = 'none';
     return;
   }
 
@@ -33,6 +35,7 @@ function renderRespPanel() {
     timeEl.style.display  = 'none';
     sizeEl.style.display  = 'none';
     copyBtn.style.display = 'none';
+    exBtn.style.display   = 'none';
     wrap.innerHTML = `
       <div style="color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:4px;padding:10px 14px">
         ${esc(resp.error)}
@@ -63,6 +66,7 @@ function renderRespPanel() {
   // Body tab
   if (tab.respTab === 'body') {
     copyBtn.style.display = '';
+    exBtn.style.display   = tab.reqId ? '' : 'none';
 
     if (resp.bodyType === 'image') {
       wrap.innerHTML = `<img src="${resp.body}" style="max-width:100%;border-radius:4px">`;
@@ -94,6 +98,7 @@ function renderRespPanel() {
   // Headers tab
   } else if (tab.respTab === 'headers') {
     copyBtn.style.display = 'none';
+    exBtn.style.display   = 'none';
     wrap.innerHTML = Object.entries(resp.headers)
       .map(([k, v]) =>
         `<div style="margin-bottom:3px">
@@ -106,6 +111,7 @@ function renderRespPanel() {
   // Tests tab
   } else if (tab.respTab === 'tests') {
     copyBtn.style.display = 'none';
+    exBtn.style.display   = 'none';
     const results = resp.testResults || [];
     if (!results.length) {
       wrap.innerHTML = `<span class="muted">No tests defined. Add a test script in the Scripts tab.</span>`;
@@ -139,6 +145,28 @@ function copyResponse() {
   if (resp?.body) {
     navigator.clipboard.writeText(resp.body).then(() => notify('Copied', 'success'));
   }
+}
+
+// Saves the current response as a named "Example" on the request, viewable
+// later from the request's Examples tab — see js/request.js's examplesHTML().
+async function saveResponseAsExample() {
+  const tab = activeTab();
+  if (!tab?.resp || !tab.reqId) return;
+
+  const name = await promptDialog('Save response as example named:', `${tab.resp.status} ${tab.resp.statusText}`.trim());
+  if (!name) return;
+
+  const resp = tab.resp;
+  tab.req.examples.push({
+    id: uid(), name,
+    status: resp.status, statusText: resp.statusText,
+    headers: resp.headers, body: resp.body, bodyType: resp.bodyType,
+    createdAt: Date.now(),
+  });
+
+  scheduleAutoSave();
+  updateTabBadges();
+  notify(`Saved example "${name}"`, 'success');
 }
 
 // ─── JSON Tree (DOM-built — no innerHTML, safe for any content) ───────────────

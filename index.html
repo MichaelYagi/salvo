@@ -39,6 +39,7 @@
     <select id="env-select" style="width:150px;padding:3px 7px;font-size:12px" onchange="envQuickSwitch(this.value)"></select>
     <button onclick="openEnvModal()">Manage Env</button>
     <button onclick="openCookiesModal()" title="View and manage stored cookies">Cookies</button>
+    <button onclick="openMockModal()" title="Serve canned responses for requests with mocking enabled">Mock Server</button>
     <div class="sep"></div>
     <span id="save-status" style="font-size:11px;color:var(--text-muted)">All changes saved</span>
     <div id="theme-picker">
@@ -121,6 +122,9 @@
           <button class="tab"        data-tab="body"    onclick="switchReqTab('body')">Body</button>
           <button class="tab"        data-tab="scripts" onclick="switchReqTab('scripts')">Scripts</button>
           <button class="tab"        data-tab="curl"    onclick="switchReqTab('curl')">cURL</button>
+          <button class="tab"        data-tab="docs"     onclick="switchReqTab('docs')">Docs</button>
+          <button class="tab"        data-tab="examples" onclick="switchReqTab('examples')">Examples</button>
+          <button class="tab"        data-tab="mock"     onclick="switchReqTab('mock')">Mock</button>
           <div class="sep"></div>
           <input id="req-name-input"
                  oninput="onReqNameChange(this.value)"
@@ -143,6 +147,7 @@
             <button class="tab"        data-rtab="headers" onclick="switchRespTab('headers')" style="padding:3px 10px">Headers</button>
             <button class="tab"        data-rtab="tests"   onclick="switchRespTab('tests')"   style="padding:3px 10px">Tests<span id="resp-tests-badge" class="tab-badge" style="display:none"></span></button>
             <button id="copy-resp-btn" onclick="copyResponse()" style="font-size:11px;display:none">Copy</button>
+            <button id="save-example-btn" onclick="saveResponseAsExample()" style="font-size:11px;display:none">Save as Example</button>
           </div>
           <div id="resp-body-wrap">
             <span class="muted">Press Send to execute the request</span>
@@ -197,11 +202,51 @@
      onclick="if(event.target===this)closeRunnerModal()">
   <div class="modal runner-modal" onclick="event.stopPropagation()">
     <h3 id="runner-title">Run Collection</h3>
+    <div id="runner-setup">
+      <p class="muted" style="font-size:12px">Optionally select a CSV or JSON data file — the collection will run once per row, with each row's columns available as <code>{{variables}}</code> (also via <code>pm.iterationData.get('key')</code>).</p>
+      <label>Data file (optional)</label>
+      <input type="file" id="runner-data-file" accept=".csv,.json,application/json,text/csv" onchange="onRunnerDataFile(this)">
+      <div id="runner-data-info" class="muted" style="font-size:11px;margin-top:4px"></div>
+    </div>
     <div id="runner-summary" class="muted" style="font-size:12px;margin-bottom:8px"></div>
     <div id="runner-results" class="runner-results"></div>
     <div class="modal-footer">
+      <button id="runner-start-btn" class="btn-primary" onclick="startRunnerRun()">Start Run</button>
       <button id="runner-stop-btn" onclick="stopRunner()" style="color:var(--danger)">Stop</button>
       <button class="btn-primary" onclick="closeRunnerModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Collection Info Modal ──────────────────────────────────────────────── -->
+<div id="col-info-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)closeColInfoModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="col-info-title">Collection Description</h3>
+    <label>Description</label>
+    <textarea id="col-info-desc" style="width:100%;min-height:140px;font-family:inherit;font-size:12px;padding:8px;resize:vertical"></textarea>
+    <div class="modal-footer">
+      <button onclick="closeColInfoModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveColInfoModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mock Server Modal ──────────────────────────────────────────────────── -->
+<div id="mock-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)closeMockModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>Mock Server</h3>
+    <p class="muted">Serves canned responses for any request with mocking enabled (its "Mock" tab).
+       Requests are matched by method and path — <code>:name</code> path segments match anything.</p>
+    <label>Port</label>
+    <input id="mock-port-input" type="number" value="5875" style="width:120px">
+    <div id="mock-status" class="muted" style="font-size:12px;margin:8px 0"></div>
+    <div id="mock-routes"></div>
+    <div class="modal-footer">
+      <button id="mock-stop-btn" onclick="stopMock()" style="color:var(--danger);display:none">Stop</button>
+      <button id="mock-start-btn" class="btn-primary" onclick="startMock()">Start</button>
+      <button onclick="closeMockModal()">Close</button>
     </div>
   </div>
 </div>
@@ -241,6 +286,7 @@
 <script src="js/collections.js"></script> <!-- collection / folder / req CRUD    -->
 <script src="js/modals.js"></script>      <!-- environment modal                 -->
 <script src="js/runner.js"></script>      <!-- collection runner                 -->
+<script src="js/mock.js"></script>        <!-- mock server modal                 -->
 <script src="js/app.js"></script>         <!-- init, save, resizer, history      -->
 
 </body>

@@ -13,6 +13,10 @@ function normalizeReq(r) {
     auth:    { ...defaultAuth(), ...(r.auth || {}) },
     preRequestScript: r.preRequestScript || '',
     testScript:       r.testScript || '',
+    description: r.description || '',
+    comments: r.comments || [],
+    mock: { ...defaultMock(), ...(r.mock || {}) },
+    examples: r.examples || [],
   };
 }
 
@@ -23,6 +27,7 @@ async function loadData() {
   state.cols = (data.cols || []).map(c => ({
     id:       uid(),
     name:     c.name,
+    description: c.description || '',
     requests: (c.requests || []).map(normalizeReq),
     folders:  (c.folders  || []).map(f => ({
       id:       uid(),
@@ -236,6 +241,10 @@ function replayHistory(i) {
     auth:    defaultAuth(),
     preRequestScript: '',
     testScript:       '',
+    description: '',
+    comments: [],
+    mock: defaultMock(),
+    examples: [],
   };
 
   const tab = {

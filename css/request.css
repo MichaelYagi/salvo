@@ -81,6 +81,21 @@
 .kv-note             { font-family: inherit !important; color: var(--text-muted) !important; font-style: italic; }
 .kv-note::placeholder { color: var(--text-faint); font-style: italic; }
 
+/* form-data rows get a type select (text/file) and a wider value/file column */
+.kv-grid-formdata {
+  display: grid;
+  grid-template-columns: 18px 1fr 70px 1.4fr 22px;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.kv-grid-formdata input,
+.kv-grid-formdata select { width: 100%; font-family: monospace; font-size: 11px; }
+
+.kv-file-cell    { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.kv-file-btn     { font-size: 11px; padding: 2px 8px; white-space: nowrap; }
+.kv-file-name    { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .kv-del          { color: var(--danger) !important; font-size: 15px; padding: 2px 4px; }
 .kv-del:hover    { background: var(--danger-bg) !important; }
 .kv-add          { color: var(--accent); margin-top: 4px; }
@@ -158,6 +173,82 @@
   padding: 8px;
   resize: vertical;
 }
+
+/* ─── Docs & Comments ────────────────────────────────────────────────────────── */
+.docs-editor h4      { margin: 0 0 4px; font-size: 12px; color: var(--text); }
+.docs-editor .muted  { font-size: 11px; margin: 0 0 8px; line-height: 1.5; }
+.docs-desc-area {
+  width: 100%;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 100px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.comments-list { margin-top: 8px; }
+.comment-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.comment-meta   { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.comment-author { font-weight: 600; color: var(--text-bright); }
+.comment-date   { color: var(--text-muted); font-size: 11px; }
+.comment-del    { margin-left: auto; color: var(--danger); padding: 0 4px; }
+.comment-text   { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+
+.comment-add { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.comment-add input    { width: 100%; }
+.comment-add textarea { width: 100%; font-family: inherit; font-size: 12px; min-height: 60px; padding: 8px; resize: vertical; }
+.comment-add .btn-primary { align-self: flex-start; }
+
+/* ─── Saved Response Examples ───────────────────────────────────────────────── */
+.examples-list  { display: flex; flex-direction: column; gap: 6px; }
+.example-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.example-name { font-weight: 600; color: var(--text-bright); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.example-date { color: var(--text-muted); font-size: 11px; }
+
+/* ─── Mock Response ──────────────────────────────────────────────────────────── */
+.mock-editor label   { display: block; color: var(--text-muted); font-size: 11px; margin: 0 0 4px; }
+.mock-editor .muted  { font-size: 11px; line-height: 1.5; margin: 8px 0 12px; }
+.mock-editor .mock-enable { color: var(--text); font-size: 13px; margin-bottom: 4px; }
+#mock-body-area {
+  width: 100%;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 120px;
+  padding: 8px;
+  resize: vertical;
+}
+
+/* ─── Mock Server Modal route list ──────────────────────────────────────────── */
+.mock-route-list { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+.mock-route-item {
+  display: grid;
+  grid-template-columns: 56px 1fr 40px 1fr;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.mock-route-path   { font-family: monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-route-status { color: var(--text-muted); }
+.mock-route-name   { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ─── Responsive (tablet & phone) ───────────────────────────────────────────── */
 @media (max-width: 860px) {
