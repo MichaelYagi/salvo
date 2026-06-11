@@ -263,6 +263,10 @@ Any request can act as a mock: open its **Mock** tab, check **Enable mock respon
 
 Click **Mock Server** in the topbar to open the mock modal, which lists every request with mocking enabled across all collections. Pick a port (default `5875`) and click **Start** to launch a local HTTP server that answers each enabled mock at its method + path — `:name` path segments match any value, so `/users/:id` matches `/users/42`. Headers and body support `{{variable}}` interpolation against the active environment/globals. Click **Stop** to shut it down. Useful for developing a frontend against an API that doesn't exist yet, or for demoing without a live backend.
 
+The route list is a snapshot taken when you click **Start** — if you enable/edit a mock while the server is already running, click **Stop** then **Start** again to pick it up.
+
+Matching is **method + path only** — incoming request headers, query strings, auth, and body are not checked, so any request to a matching method/path gets the same mocked response. The headers configured on the Mock tab are *response* headers (sent back with the reply, e.g. a custom `Content-Type`), not a requirement on the incoming request.
+
 ## Cookie Jar
 
 Salvo keeps a server-side cookie jar at `data/_salvo/cookies.json`. Whenever a response includes `Set-Cookie` headers, the cookies are parsed and stored automatically; on later requests, any stored cookie whose domain, path, expiry, and `Secure` flag match the request URL is sent back in the `Cookie` header — no manual copying of session cookies between requests.

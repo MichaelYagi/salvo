@@ -124,6 +124,7 @@ async function init() {
   }
 
   refreshCookieJar();
+  refreshMockServerStatus();
   renderEnvSelect();
   renderSidebar();
   setupResizer();

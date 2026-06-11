@@ -80,6 +80,7 @@ function switchReqTab(tabName) {
   updateTabBadges();
   renderReqPanel();
   scheduleDiskSave();
+  if (tabName === 'curl') refreshMockServerStatus();
 }
 
 // ─── Request panel dispatcher ─────────────────────────────────────────────────

@@ -80,19 +80,47 @@ function buildCurl() {
   return parts.join(' \\\n  ');
 }
 
+// Builds a curl command targeting this request's mock route directly on the
+// running mock server (host:port from /api/mock/status, path from extractMockPath).
+function buildMockCurl() {
+  const r = activeTab()?.req;
+  if (!r || !_mockStatus?.running) return '';
+
+  const host = (typeof location !== 'undefined' && location.hostname) || 'localhost';
+  const parts = ['curl'];
+  if (r.method !== 'GET') parts.push(`-X ${r.method}`);
+  parts.push(`'http://${host}:${_mockStatus.port}${extractMockPath(r.url)}'`);
+  return parts.join(' \\\n  ');
+}
+
 // ─── Tab panel HTML ───────────────────────────────────────────────────────────
 
 function curlPanelHTML() {
+  const r = activeTab()?.req;
   const cmd = buildCurl();
   if (!cmd) return `<p class="muted">Enter a URL to see the curl command.</p>`;
 
-  return `
+  let html = `
     <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
       <button class="btn-primary" onclick="copyCurl()" style="font-size:11px;padding:4px 12px">Copy</button>
     </div>
     <pre id="curl-output" style="margin:0;background:var(--bg);border:1px solid var(--bg-input);border-radius:4px;
          padding:12px 14px;font-family:monospace;font-size:12px;line-height:1.7;
          color:var(--text);white-space:pre-wrap;word-break:break-all">${esc(cmd)}</pre>`;
+
+  if (r?.mock?.enabled && _mockStatus?.running) {
+    html += `
+      <div class="kv-computed-label" style="margin-top:16px">Mock Server</div>
+      <p class="muted">This request's mock is enabled. Test it directly against the running mock server:</p>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+        <button class="btn-primary" onclick="copyMockCurl()" style="font-size:11px;padding:4px 12px">Copy</button>
+      </div>
+      <pre id="mock-curl-output" style="margin:0;background:var(--bg);border:1px solid var(--bg-input);border-radius:4px;
+           padding:12px 14px;font-family:monospace;font-size:12px;line-height:1.7;
+           color:var(--text);white-space:pre-wrap;word-break:break-all">${esc(buildMockCurl())}</pre>`;
+  }
+
+  return html;
 }
 
 // ─── Copy to clipboard ────────────────────────────────────────────────────────
@@ -101,4 +129,10 @@ function copyCurl() {
   const cmd = buildCurl();
   if (!cmd) return;
   navigator.clipboard.writeText(cmd).then(() => notify('curl copied', 'success'));
+}
+
+function copyMockCurl() {
+  const cmd = buildMockCurl();
+  if (!cmd) return;
+  navigator.clipboard.writeText(cmd).then(() => notify('mock curl copied', 'success'));
 }

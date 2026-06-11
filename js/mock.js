@@ -38,10 +38,13 @@ async function refreshMockStatus() {
   try {
     const res  = await fetch('/api/mock/status');
     const data = await res.json();
+    _mockStatus = data;
     renderMockModal(data);
   } catch (e) {
-    renderMockModal({ running: false, port: null, routes: 0 });
+    _mockStatus = { running: false, port: null, routes: 0 };
+    renderMockModal(_mockStatus);
   }
+  updateMockServerBadge();
 }
 
 function renderMockModal(status) {
@@ -97,4 +100,27 @@ async function stopMock() {
     notify(`Failed to stop mock server: ${e.message}`, 'error');
   }
   await refreshMockStatus();
+}
+
+// ─── Shared mock server status ──────────────────────────────────────────────────
+// Lets curlPanelHTML() (js/curl.js) show a "test against the mock server" command
+// when this request's mock is enabled and the mock server happens to be running,
+// and lights up a badge on the topbar's "Mock Server" button. Refreshed on init
+// and each time the cURL tab is opened (switchReqTab).
+let _mockStatus = null;
+
+function updateMockServerBadge() {
+  const badge = document.getElementById('mock-server-badge');
+  if (badge) badge.style.display = _mockStatus?.running ? '' : 'none';
+}
+
+async function refreshMockServerStatus() {
+  try {
+    const res = await fetch('/api/mock/status');
+    _mockStatus = await res.json();
+  } catch {
+    _mockStatus = null;
+  }
+  updateMockServerBadge();
+  if (activeTab()?.reqTab === 'curl') renderReqPanel();
 }
