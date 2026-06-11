@@ -107,8 +107,9 @@
           </select>
           <input id="url-input" type="text"
                  placeholder="https://api.example.com/endpoint {{var}}"
-                 oninput="activeTab().req.url=this.value;syncParamsFromUrl();syncPathVarsFromUrl();scheduleAutoSave();updateTabBadges();renderReqPanel()"
-                 onkeydown="if(event.key==='Enter')sendRequest()">
+                 oninput="activeTab().req.url=this.value;syncParamsFromUrl();syncPathVarsFromUrl();scheduleAutoSave();updateTabBadges();renderReqPanel();showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event) || (event.key==='Enter' && sendRequest())"
+                 onblur="varSuggestBlur()">
           <button id="send-btn" class="btn-primary" onclick="sendRequest()">Send</button>
         </div>
 
@@ -210,6 +211,9 @@
 
 <!-- ── Header value autocomplete (positioned by JS) ─────────────────────── -->
 <div id="header-suggest" class="header-suggest" style="display:none"></div>
+
+<!-- ── {{variable}} autocomplete (positioned by JS) ─────────────────────── -->
+<div id="var-suggest" class="header-suggest" style="display:none"></div>
 
 <!-- ── JavaScript — load order matters ──────────────────────────────────── -->
 <script src="js/state.js"></script>       <!-- constants, state, storage, utils  -->

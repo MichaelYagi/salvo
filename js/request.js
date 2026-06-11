@@ -256,6 +256,121 @@ function kvHeaderBlur() {
   setTimeout(hideHeaderSuggest, 150);
 }
 
+// ─── {{variable}} Autocomplete ─────────────────────────────────────────────
+// Suggests environment variables when the cursor sits inside an unclosed
+// `{{...}}` in any field that's interpolated at send time (URL, params,
+// headers, form-data, raw body, auth fields).
+
+function getEnvVarNames() {
+  const env = state.envs.find(e => e.id === state.activeEnv);
+  return (env?.vars || []).filter(v => v.enabled && v.key).map(v => v.key);
+}
+
+// If the cursor sits inside an unclosed `{{...}}`, return { start, prefix } —
+// `start` is the index of the `{{`, `prefix` is the (identifier-only) text typed since.
+function findVarContext(value, cursorPos) {
+  const open = value.lastIndexOf('{{', cursorPos - 1);
+  if (open === -1) return null;
+  const between = value.slice(open + 2, cursorPos);
+  if (!/^\w*$/.test(between)) return null;
+  return { start: open, prefix: between };
+}
+
+function showVarSuggest(inputEl) {
+  const ctx = findVarContext(inputEl.value, inputEl.selectionStart);
+  if (!ctx) { hideVarSuggest(); return false; }
+
+  const names = getEnvVarNames().filter(n => n.toLowerCase().includes(ctx.prefix.toLowerCase()));
+  if (!names.length) { hideVarSuggest(); return false; }
+
+  const box = document.getElementById('var-suggest');
+  box.innerHTML = '';
+  box._target = inputEl;
+  box._ctx    = ctx;
+  names.forEach((name, idx) => {
+    const el = document.createElement('div');
+    el.className = 'hs-item' + (idx === 0 ? ' active' : '');
+    el.textContent = name;
+    el.addEventListener('mouseenter', () => {
+      box.querySelector('.hs-item.active')?.classList.remove('active');
+      el.classList.add('active');
+    });
+    // mousedown (not click) fires before the input's blur, so we can accept
+    // the suggestion without the dropdown disappearing first.
+    el.addEventListener('mousedown', e => { e.preventDefault(); acceptVarSuggest(name); });
+    box.appendChild(el);
+  });
+
+  const rect = inputEl.getBoundingClientRect();
+  box.style.display = '';
+  box.style.left    = (rect.left + window.scrollX) + 'px';
+  box.style.top     = (rect.bottom + window.scrollY) + 'px';
+  box.style.width   = Math.max(rect.width, 160) + 'px';
+
+  hideHeaderSuggest();
+  return true;
+}
+
+function hideVarSuggest() {
+  const box = document.getElementById('var-suggest');
+  if (box) box.style.display = 'none';
+}
+
+function acceptVarSuggest(name) {
+  const box     = document.getElementById('var-suggest');
+  const inputEl = box._target;
+  const ctx     = box._ctx;
+  if (!inputEl || !ctx) return;
+
+  const value     = inputEl.value;
+  const before    = value.slice(0, ctx.start);
+  const after     = value.slice(ctx.start + 2 + ctx.prefix.length);
+  const inserted  = `{{${name}}}`;
+  inputEl.value   = before + inserted + after;
+  const pos = (before + inserted).length;
+
+  hideVarSuggest();
+  inputEl.focus();
+  inputEl.setSelectionRange(pos, pos);
+  // Re-fire input so the field's own oninput handler syncs state/auto-saves.
+  inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Returns true if the keypress was consumed (caller should not also act on it).
+function varSuggestKeydown(inputEl, event) {
+  const box = document.getElementById('var-suggest');
+  if (!box || box.style.display === 'none' || box._target !== inputEl) return false;
+
+  const items = [...box.querySelectorAll('.hs-item')];
+  if (!items.length) return false;
+
+  if (event.key === 'Tab' || event.key === 'Enter') {
+    event.preventDefault();
+    const active = box.querySelector('.hs-item.active') || items[0];
+    acceptVarSuggest(active.textContent);
+    return true;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    let idx = items.findIndex(el => el.classList.contains('active'));
+    items[idx]?.classList.remove('active');
+    idx = event.key === 'ArrowDown' ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
+    items[idx].classList.add('active');
+    items[idx].scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+  if (event.key === 'Escape') {
+    hideVarSuggest();
+    return true;
+  }
+  return false;
+}
+
+function varSuggestBlur() {
+  // Delay so a click/mousedown on a suggestion can be handled first.
+  setTimeout(hideVarSuggest, 150);
+}
+
 // ─── URL <-> Params sync ───────────────────────────────────────────────────────
 // Keeps the URL bar's query string and the Params table in sync, like Postman.
 
@@ -435,22 +550,26 @@ function kvEditorHTML(rows, key) {
     const suggestAttrs = field => key === 'headers'
       ? `id="kv-${field}-headers-${i}"
                onfocus="showHeaderSuggest(${i},'${field}')"
-               onkeydown="kvHeaderKeydown(${i},'${field}',event)"
-               onblur="kvHeaderBlur()"
+               onkeydown="if(!varSuggestKeydown(this,event))kvHeaderKeydown(${i},'${field}',event)"
+               onblur="kvHeaderBlur();varSuggestBlur()"
                autocomplete="off"`
-      : '';
+      : `onkeydown="varSuggestKeydown(this,event)"
+               onblur="varSuggestBlur()"`;
+    const varInput = field => key === 'headers'
+      ? `if(!showVarSuggest(this))showHeaderSuggest(${i},'${field}')`
+      : `showVarSuggest(this)`;
     html += `
       <div class="${hasNotes ? 'kv-grid-notes' : 'kv-grid'}${conflict ? ' kv-conflict' : ''}"
            ${conflict ? `title="This header will be overridden by the Auth tab's ${esc(row.key)} value when the request is sent"` : ''}>
         <input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="kvToggle('${key}',${i},this.checked)">
         <input value="${esc(row.key)}"
                ${suggestAttrs('key')}
-               oninput="kvSet('${key}',${i},'key',this.value)${key === 'headers' ? `;showHeaderSuggest(${i},'key')` : ''}"
+               oninput="kvSet('${key}',${i},'key',this.value);${varInput('key')}"
                placeholder="name"
                style="opacity:${op}">
         <input value="${esc(row.value)}"
                ${suggestAttrs('value')}
-               oninput="kvSet('${key}',${i},'value',this.value)${key === 'headers' ? `;showHeaderSuggest(${i},'value')` : ''}"
+               oninput="kvSet('${key}',${i},'value',this.value);${varInput('value')}"
                placeholder="value"
                style="opacity:${op}">
         ${hasNotes ? `<input value="${esc(row.note || '')}"
@@ -558,7 +677,8 @@ function authHTML(a) {
   if (a.type === 'bearer') {
     html += `
       <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Token</label>
-      <input value="${esc(a.token)}" oninput="authSet('token',this.value)"
+      <input value="${esc(a.token)}" oninput="authSet('token',this.value);showVarSuggest(this)"
+             onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
              placeholder="Bearer token…" style="width:100%;font-family:monospace">`;
   }
 
@@ -567,11 +687,13 @@ function authHTML(a) {
       <div class="two-col">
         <div>
           <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Username</label>
-          <input value="${esc(a.username)}" oninput="authSet('username',this.value)" style="width:100%">
+          <input value="${esc(a.username)}" oninput="authSet('username',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
         <div>
           <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Password</label>
-          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value)" style="width:100%">
+          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
       </div>`;
   }
@@ -581,12 +703,14 @@ function authHTML(a) {
       <div class="two-col">
         <div>
           <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Header Name</label>
-          <input value="${esc(a.apiKey)}" oninput="authSet('apiKey',this.value)"
+          <input value="${esc(a.apiKey)}" oninput="authSet('apiKey',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
                  placeholder="X-API-Key" style="width:100%;font-family:monospace">
         </div>
         <div>
           <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Value</label>
-          <input value="${esc(a.apiValue)}" oninput="authSet('apiValue',this.value)"
+          <input value="${esc(a.apiValue)}" oninput="authSet('apiValue',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
                  style="width:100%;font-family:monospace">
         </div>
       </div>`;
@@ -595,16 +719,19 @@ function authHTML(a) {
   if (a.type === 'oauth2_cc' || a.type === 'oauth2_pwd') {
     html += `
       <label style="${AUTH_LABEL_STYLE}">Access Token URL</label>
-      <input value="${esc(a.accessTokenUrl)}" oninput="authSet('accessTokenUrl',this.value)"
+      <input value="${esc(a.accessTokenUrl)}" oninput="authSet('accessTokenUrl',this.value);showVarSuggest(this)"
+             onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
              placeholder="https://auth.example.com/oauth/token" style="width:100%;font-family:monospace;margin-bottom:8px">
       <div class="two-col">
         <div>
           <label style="${AUTH_LABEL_STYLE}">Client ID</label>
-          <input value="${esc(a.clientId)}" oninput="authSet('clientId',this.value)" style="width:100%">
+          <input value="${esc(a.clientId)}" oninput="authSet('clientId',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
         <div>
           <label style="${AUTH_LABEL_STYLE}">Client Secret</label>
-          <input type="password" value="${esc(a.clientSecret)}" oninput="authSet('clientSecret',this.value)" style="width:100%">
+          <input type="password" value="${esc(a.clientSecret)}" oninput="authSet('clientSecret',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
       </div>`;
 
@@ -613,18 +740,21 @@ function authHTML(a) {
       <div class="two-col">
         <div>
           <label style="${AUTH_LABEL_STYLE}">Username</label>
-          <input value="${esc(a.username)}" oninput="authSet('username',this.value)" style="width:100%">
+          <input value="${esc(a.username)}" oninput="authSet('username',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
         <div>
           <label style="${AUTH_LABEL_STYLE}">Password</label>
-          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value)" style="width:100%">
+          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
       </div>`;
     }
 
     html += `
       <label style="${AUTH_LABEL_STYLE}">Scope (optional)</label>
-      <input value="${esc(a.scope)}" oninput="authSet('scope',this.value)" style="width:100%;font-family:monospace;margin-bottom:8px">
+      <input value="${esc(a.scope)}" oninput="authSet('scope',this.value);showVarSuggest(this)"
+             onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%;font-family:monospace;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
         <button class="btn-primary" onclick="manualFetchOAuthToken()">Get Access Token</button>
         <span style="font-size:11px;color:var(--text-muted)">${
@@ -640,11 +770,13 @@ function authHTML(a) {
       <div class="two-col">
         <div>
           <label style="${AUTH_LABEL_STYLE}">Username</label>
-          <input value="${esc(a.username)}" oninput="authSet('username',this.value)" style="width:100%">
+          <input value="${esc(a.username)}" oninput="authSet('username',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
         <div>
           <label style="${AUTH_LABEL_STYLE}">Password</label>
-          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value)" style="width:100%">
+          <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value);showVarSuggest(this)"
+                 onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
       </div>
       <p class="muted">Salvo automatically responds to the server's digest challenge.</p>`;
@@ -653,10 +785,12 @@ function authHTML(a) {
   if (a.type === 'jwt') {
     html += `
       <label style="${AUTH_LABEL_STYLE}">Secret (HS256)</label>
-      <input type="password" value="${esc(a.jwtSecret)}" oninput="authSet('jwtSecret',this.value)"
+      <input type="password" value="${esc(a.jwtSecret)}" oninput="authSet('jwtSecret',this.value);showVarSuggest(this)"
+             onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
              style="width:100%;font-family:monospace;margin-bottom:8px">
       <label style="${AUTH_LABEL_STYLE}">Payload (JSON claims)</label>
-      <textarea oninput="authSet('jwtPayload',this.value)"
+      <textarea oninput="authSet('jwtPayload',this.value);showVarSuggest(this)"
+                onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
                 style="width:100%;min-height:100px;font-family:monospace;font-size:12px">${esc(a.jwtPayload)}</textarea>
       <p class="muted"><code>iat</code> and <code>exp</code> (1 hour) are added automatically if not present.</p>`;
   }
@@ -701,7 +835,8 @@ function bodyHTML(b) {
   if (b.type === 'none') {
     html += `<p class="muted">No body will be sent.</p>`;
   } else if (b.type === 'raw') {
-    html += `<textarea id="body-raw-area" oninput="bodySet('raw',this.value)">${esc(b.raw)}</textarea>`;
+    html += `<textarea id="body-raw-area" oninput="bodySet('raw',this.value);showVarSuggest(this)"
+               onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()">${esc(b.raw)}</textarea>`;
   } else {
     html += kvEditorHTML(b.formData, 'formData');
   }

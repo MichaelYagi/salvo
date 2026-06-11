@@ -23,6 +23,7 @@ function loadSandbox() {
     navigator: {},
     fetch: () => Promise.reject(new Error('fetch not available in tests')),
     Blob: function Blob() {},
+    Event: function Event(type) { this.type = type; },
     URL,
     btoa: s => Buffer.from(s, 'binary').toString('base64'),
     setTimeout, clearTimeout,
@@ -197,4 +198,144 @@ test('kvEditorHTML does not flag a disabled header that shadows an Auth header',
 
   const html = sandbox.kvEditorHTML(req.headers, 'headers');
   assert.doesNotMatch(html, /kv-conflict/);
+});
+
+// ─── {{variable}} autocomplete ──────────────────────────────────────────────
+
+function makeMockEl() {
+  const classes = new Set();
+  return {
+    textContent: '',
+    get className() { return [...classes].join(' '); },
+    set className(v) { classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach(c => classes.add(c)); },
+    classList: {
+      add: c => classes.add(c),
+      remove: c => classes.delete(c),
+      contains: c => classes.has(c),
+    },
+    addEventListener() {},
+    scrollIntoView() {},
+  };
+}
+
+function makeSuggestBox() {
+  const box = {
+    style: {},
+    _children: [],
+    set innerHTML(_v) { box._children = []; },
+    appendChild(el) { box._children.push(el); },
+    querySelector(sel) {
+      if (sel === '.hs-item.active') return box._children.find(c => c.classList.contains('active')) || null;
+      return null;
+    },
+    querySelectorAll(sel) {
+      return sel === '.hs-item' ? box._children : [];
+    },
+    getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 0, width: 100 }),
+  };
+  return box;
+}
+
+function makeMockInput(value, cursorPos) {
+  return {
+    value,
+    selectionStart: cursorPos,
+    _events: {},
+    focus() {},
+    setSelectionRange(s) { this.selectionStart = s; },
+    dispatchEvent(ev) { this._dispatched = ev; },
+    getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 0, width: 100 }),
+  };
+}
+
+function loadSandboxWithSuggestBox() {
+  const sandbox = loadSandbox();
+  const box = makeSuggestBox();
+  sandbox.document.getElementById = id => (id === 'var-suggest' ? box : null);
+  sandbox.document.createElement = () => makeMockEl();
+  sandbox.scrollX = 0;
+  sandbox.scrollY = 0;
+  sandbox.suggestBox = box;
+  return sandbox;
+}
+
+test('findVarContext detects an unclosed {{ before the cursor', () => {
+  const sandbox = loadSandbox();
+  assert.deepEqual(sandbox.findVarContext('{{base', 6), { start: 0, prefix: 'base' });
+  assert.strictEqual(sandbox.findVarContext('{{base}}', 8), null);
+  assert.strictEqual(sandbox.findVarContext('hello world', 5), null);
+  assert.deepEqual(sandbox.findVarContext('{{base}}/{{tok', 14), { start: 9, prefix: 'tok' });
+});
+
+test('getEnvVarNames returns enabled var keys from the active environment', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [
+      { id: '1', key: 'baseUrl', value: 'https://x', enabled: true },
+      { id: '2', key: 'token', value: 'abc', enabled: true },
+      { id: '3', key: 'disabled', value: 'x', enabled: false },
+    ],
+  });
+  sandbox.state.activeEnv = 'env1';
+  assert.deepEqual(sandbox.getEnvVarNames(), ['baseUrl', 'token']);
+});
+
+test('showVarSuggest populates the dropdown with matching env var names', () => {
+  const sandbox = loadSandboxWithSuggestBox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [
+      { id: '1', key: 'baseUrl', value: 'https://x', enabled: true },
+      { id: '2', key: 'token', value: 'abc', enabled: true },
+    ],
+  });
+  sandbox.state.activeEnv = 'env1';
+
+  const input = makeMockInput('{{ba', 4);
+  const shown = sandbox.showVarSuggest(input);
+  assert.strictEqual(shown, true);
+  assert.deepEqual(sandbox.suggestBox._children.map(c => c.textContent), ['baseUrl']);
+  assert.notStrictEqual(sandbox.suggestBox.style.display, 'none');
+});
+
+test('showVarSuggest hides the dropdown when not in a {{ context', () => {
+  const sandbox = loadSandboxWithSuggestBox();
+  sandbox.suggestBox.style.display = '';
+  const input = makeMockInput('hello', 5);
+  const shown = sandbox.showVarSuggest(input);
+  assert.strictEqual(shown, false);
+  assert.strictEqual(sandbox.suggestBox.style.display, 'none');
+});
+
+test('acceptVarSuggest inserts {{name}} and dispatches an input event', () => {
+  const sandbox = loadSandboxWithSuggestBox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [{ id: '1', key: 'baseUrl', value: 'https://x', enabled: true }],
+  });
+  sandbox.state.activeEnv = 'env1';
+
+  const input = makeMockInput('url: {{ba', 9);
+  sandbox.showVarSuggest(input);
+  sandbox.acceptVarSuggest('baseUrl');
+
+  assert.strictEqual(input.value, 'url: {{baseUrl}}');
+  assert.strictEqual(input.selectionStart, 'url: {{baseUrl}}'.length);
+  assert.ok(input._dispatched);
+  assert.strictEqual(input._dispatched.type, 'input');
+});
+
+test('varSuggestKeydown accepts the active suggestion on Tab', () => {
+  const sandbox = loadSandboxWithSuggestBox();
+  sandbox.state.envs.push({
+    id: 'env1', name: 'Env1', vars: [{ id: '1', key: 'baseUrl', value: 'https://x', enabled: true }],
+  });
+  sandbox.state.activeEnv = 'env1';
+
+  const input = makeMockInput('{{ba', 4);
+  sandbox.showVarSuggest(input);
+
+  let prevented = false;
+  const handled = sandbox.varSuggestKeydown(input, { key: 'Tab', preventDefault: () => { prevented = true; } });
+  assert.strictEqual(handled, true);
+  assert.strictEqual(prevented, true);
+  assert.strictEqual(input.value, '{{baseUrl}}');
 });
