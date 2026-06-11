@@ -7,6 +7,7 @@ function normalizeReq(r) {
     method:  (r.method || 'GET').toUpperCase(),
     url:     r.url || '',
     params:  r.params  || [],
+    pathVars: r.pathVars || [],
     headers: r.headers || [],
     body:    r.body || { type: 'none', raw: '', formData: [] },
     auth:    { ...defaultAuth(), ...(r.auth || {}) },
@@ -116,6 +117,7 @@ async function init() {
     notify('Could not load data/: ' + e.message, 'error');
   }
 
+  refreshCookieJar();
   renderEnvSelect();
   renderSidebar();
   setupResizer();
@@ -228,6 +230,7 @@ function replayHistory(i) {
     url:     h.url,
     headers: [],
     params:  [],
+    pathVars: [],
     body:    { type: 'none', raw: '', formData: [] },
     auth:    defaultAuth(),
     preRequestScript: '',

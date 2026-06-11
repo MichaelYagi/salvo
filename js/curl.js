@@ -11,8 +11,9 @@ function buildCurl() {
     parts.push(`-X ${r.method}`);
   }
 
-  // URL + query params
+  // URL + path variables + query params
   let rawUrl = interp(r.url);
+  rawUrl = substitutePathVars(rawUrl, r.pathVars);
   if (!rawUrl.match(/^https?:\/\//i)) rawUrl = 'https://' + rawUrl;
   try {
     const urlObj = new URL(rawUrl);

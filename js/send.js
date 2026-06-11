@@ -74,6 +74,7 @@ async function sendRequest() {
 
     if (state.showHist) renderHistPanel();
     scheduleDiskSave();
+    await refreshCookieJar();
 
   } catch (err) {
     const elapsed = Date.now() - start;
@@ -87,6 +88,7 @@ async function sendRequest() {
       document.getElementById('send-btn').textContent = 'Send';
       document.getElementById('send-btn').onclick     = sendRequest;
       renderRespPanel();
+      if (tab.reqTab === 'headers') renderReqPanel();
     }
   }
 }
@@ -98,8 +100,9 @@ function cancelReq() {
 // ─── Build fetch arguments from the active request ────────────────────────────
 
 async function buildRequestArgs(req) {
-  // URL + query params
+  // URL + path variables + query params
   let raw = interp(req.url);
+  raw = substitutePathVars(raw, req.pathVars);
   if (!raw.match(/^https?:\/\//i)) raw = 'https://' + raw;
   const urlObj = new URL(raw);
 

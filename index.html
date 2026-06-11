@@ -107,7 +107,7 @@
           </select>
           <input id="url-input" type="text"
                  placeholder="https://api.example.com/endpoint {{var}}"
-                 oninput="activeTab().req.url=this.value;syncParamsFromUrl();scheduleAutoSave();updateTabBadges();renderReqPanel()"
+                 oninput="activeTab().req.url=this.value;syncParamsFromUrl();syncPathVarsFromUrl();scheduleAutoSave();updateTabBadges();renderReqPanel()"
                  onkeydown="if(event.key==='Enter')sendRequest()">
           <button id="send-btn" class="btn-primary" onclick="sendRequest()">Send</button>
         </div>

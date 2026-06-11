@@ -90,6 +90,10 @@
 .kv-computed-label { color: var(--text-muted); font-size: 11px; margin: 12px 0 5px; }
 .kv-computed input { color: var(--text-muted) !important; opacity: .7; cursor: not-allowed; }
 
+/* ─── Manual header that will be overridden by the Auth tab at send time ────── */
+.kv-conflict { cursor: help; }
+.kv-conflict input:not(.kv-note) { border-color: var(--warning) !important; }
+
 /* ─── Header Value Autocomplete ────────────────────────────────────────────── */
 .header-suggest {
   position: absolute;

@@ -9,6 +9,9 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 - **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format.
 - **Multi-tab editing** — open several requests at once in browser-style tabs above the editor; each tab keeps its own edits, response, and active sub-tab.
 - **Full request editing** — method, URL, query params, headers, auth, and body (raw JSON/XML/text, form-data, x-www-form-urlencoded)
+- **URL ↔ Params sync** — editing the URL's query string updates the Params table and vice versa, like Postman.
+- **Path variables** — `:name` segments in the URL (e.g. `/users/:id`) show up as an editable "Path Variables" table on the Params tab; the names come from the URL, you fill in the values, and they're substituted in when the request is sent (and in the cURL preview).
+- **Auto-generated headers preview** — the Headers tab shows a read-only "Auto-generated" section previewing the `Authorization`/API key header from the Auth tab, the `Content-Type` the Body tab will add, and any `Cookie` header the cookie jar will attach for this request's domain. A manual header that will be silently overridden by the Auth tab (e.g. a hand-typed `Authorization`) is highlighted with a warning.
 - **Auth** — Bearer Token, Basic Auth, API Key, OAuth 2.0 (Client Credentials & Password Grant), Digest Auth, and JWT Bearer (HS256)
 - **Environment variables** — `{{variable}}` placeholders are resolved from the active environment when sending. Switch environments from the topbar dropdown, or manage them via "Manage Env".
 - **Save response values as variables** — hover any value in the response's JSON tree and click `→{{}}` to save it straight into the active environment.
@@ -81,8 +84,9 @@ All JS files share the global scope and load in order. `state.js` must be first 
 {
   "name": "Get user",
   "method": "GET",
-  "url": "https://api.example.com/users/{{userId}}",
+  "url": "https://api.example.com/users/:userId",
   "params":  [{ "id": "x", "key": "include", "value": "profile", "enabled": true, "note": "" }],
+  "pathVars": [{ "id": "z", "key": "userId", "value": "123" }],
   "headers": [{ "id": "y", "key": "Authorization", "value": "Bearer {{token}}", "enabled": true, "note": "Dev key" }],
   "body": {
     "type": "raw",
@@ -180,6 +184,8 @@ Test results show up in a **Tests** tab in the response panel, with a pass/fail 
 Salvo keeps a server-side cookie jar at `data/_salvo/cookies.json`. Whenever a response includes `Set-Cookie` headers, the cookies are parsed and stored automatically; on later requests, any stored cookie whose domain, path, expiry, and `Secure` flag match the request URL is sent back in the `Cookie` header — no manual copying of session cookies between requests.
 
 Click **Cookies** in the topbar to open the cookie jar modal, where you can see every stored cookie's name, value, domain/path, and expiry, delete individual cookies, or clear the jar entirely.
+
+Any cookie that would be attached to the current request also shows up as a read-only `Cookie` row in the Headers tab's "Auto-generated" section, so you can see exactly what will be sent.
 
 ## Tabs
 

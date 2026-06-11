@@ -26,6 +26,7 @@ function syncReqEditor() {
   ms.style.color = MC[r.method] || 'var(--text)';
   document.getElementById('url-input').value      = r.url;
   document.getElementById('req-name-input').value = r.name;
+  syncPathVarsFromUrl();
   updateTabBadges();
   renderReqPanel();
   renderRespPanel();
@@ -302,6 +303,45 @@ function syncUrlFromParams() {
   if (urlInput) urlInput.value = req.url;
 }
 
+// ─── Path Variables ────────────────────────────────────────────────────────────
+// Keeps req.pathVars in sync with `:name` segments in the URL's path, like Postman.
+// Variable names come from the URL; only the values are user-editable.
+
+function parsePathVarNames(url) {
+  const base    = splitUrlQuery(url).base;
+  const matches = base.match(/:([A-Za-z_][A-Za-z0-9_]*)/g) || [];
+  return matches.map(m => m.slice(1));
+}
+
+// Rebuild req.pathVars from the URL's `:name` segments after the user edits the URL bar,
+// preserving values for names that still appear and dropping ones that don't.
+function syncPathVarsFromUrl() {
+  const req   = activeTab().req;
+  const names = parsePathVarNames(req.url);
+  const used  = new Set();
+
+  req.pathVars = names.map(name => {
+    const idx = req.pathVars.findIndex((pv, i) => !used.has(i) && pv.key === name);
+    if (idx !== -1) { used.add(idx); return req.pathVars[idx]; }
+    return { id: uid(), key: name, value: '' };
+  });
+}
+
+// Substitute `:name` segments in a URL with their (interpolated) path-variable values.
+function substitutePathVars(url, pathVars) {
+  let result = url;
+  (pathVars || []).forEach(pv => {
+    result = result.replace(new RegExp(`:${pv.key}\\b`, 'g'), interp(pv.value));
+  });
+  return result;
+}
+
+function pathVarSet(i, value) {
+  activeTab().req.pathVars[i].value = value;
+  scheduleAutoSave();
+  if (activeTab().reqTab === 'curl') renderReqPanel();
+}
+
 // ─── Auth/Body -> computed headers preview ────────────────────────────────────
 // Mirrors the headers send.js's buildRequestArgs() adds on top of req.headers,
 // shown read-only on the Headers tab (Postman calls these "auto-generated").
@@ -338,10 +378,45 @@ function computedBodyHeaders(req) {
   return [];
 }
 
+// Mirrors server.js's cookieMatches() — does a jar cookie apply to this request's URL?
+function cookieMatchesClient(cookie, urlObj) {
+  if (cookie.expires && Date.now() > cookie.expires) return false;
+  if (cookie.secure && urlObj.protocol !== 'https:') return false;
+
+  const host = urlObj.hostname;
+  if (host !== cookie.domain && !host.endsWith('.' + cookie.domain)) return false;
+
+  const reqPath = urlObj.pathname || '/';
+  const cPath   = cookie.path || '/';
+  if (reqPath !== cPath && !reqPath.startsWith(cPath.endsWith('/') ? cPath : cPath + '/')) return false;
+
+  return true;
+}
+
+// Cookie header the server will append from the cookie jar (data/_salvo/cookies.json)
+// for this request's domain/path — see _cookieJar in js/modals.js.
+function computedCookieHeader(req) {
+  if (!_cookieJar.length) return [];
+
+  let raw = interp(req.url);
+  raw = substitutePathVars(raw, req.pathVars);
+  if (!raw.match(/^https?:\/\//i)) raw = 'https://' + raw;
+
+  let urlObj;
+  try { urlObj = new URL(raw); } catch { return []; }
+
+  const matched = _cookieJar.filter(c => cookieMatchesClient(c, urlObj));
+  if (!matched.length) return [];
+
+  const value = matched.map(c => `${c.name}=${c.value}`).join('; ');
+  return [{ key: 'Cookie', value, source: 'Cookie Jar' }];
+}
+
 function computedHeaders(req) {
   return [
     ...computedAuthHeaders(req.auth).map(h => ({ ...h, source: 'Auth tab' })),
     ...computedBodyHeaders(req).map(h => ({ ...h, source: 'Body tab' })),
+    ...computedCookieHeader(req),
   ];
 }
 
@@ -349,10 +424,14 @@ function computedHeaders(req) {
 
 function kvEditorHTML(rows, key) {
   const hasNotes = key === 'params' || key === 'headers';
+  const authHeaderKeys = key === 'headers'
+    ? new Set(computedAuthHeaders(activeTab().req.auth).map(h => h.key.toLowerCase()))
+    : null;
   let html = '';
 
   rows.forEach((row, i) => {
     const op = row.enabled ? 1 : .45;
+    const conflict = authHeaderKeys && row.enabled && row.key && authHeaderKeys.has(row.key.toLowerCase());
     const suggestAttrs = field => key === 'headers'
       ? `id="kv-${field}-headers-${i}"
                onfocus="showHeaderSuggest(${i},'${field}')"
@@ -361,7 +440,8 @@ function kvEditorHTML(rows, key) {
                autocomplete="off"`
       : '';
     html += `
-      <div class="${hasNotes ? 'kv-grid-notes' : 'kv-grid'}">
+      <div class="${hasNotes ? 'kv-grid-notes' : 'kv-grid'}${conflict ? ' kv-conflict' : ''}"
+           ${conflict ? `title="This header will be overridden by the Auth tab's ${esc(row.key)} value when the request is sent"` : ''}>
         <input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="kvToggle('${key}',${i},this.checked)">
         <input value="${esc(row.key)}"
                ${suggestAttrs('key')}
@@ -384,6 +464,23 @@ function kvEditorHTML(rows, key) {
 
   const addLabel = key === 'params' ? 'query param' : key === 'headers' ? 'header' : key === 'envVars' ? 'variable' : 'field';
   html += `<button class="kv-add" onclick="kvAdd('${key}')">+ Add ${addLabel}</button>`;
+
+  if (key === 'params') {
+    const pathVars = activeTab().req.pathVars;
+    if (pathVars.length) {
+      html += `<div class="kv-computed-label">Path Variables</div>`;
+      pathVars.forEach((pv, i) => {
+        html += `
+          <div class="kv-grid-notes">
+            <span></span>
+            <input value="${esc(pv.key)}" disabled>
+            <input value="${esc(pv.value)}" oninput="pathVarSet(${i},this.value)" placeholder="value">
+            <span></span>
+            <span></span>
+          </div>`;
+      });
+    }
+  }
 
   if (key === 'headers') {
     const computed = computedHeaders(activeTab().req);

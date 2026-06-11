@@ -164,18 +164,22 @@ function closeCookiesModal() {
   document.getElementById('cookies-modal').style.display = 'none';
 }
 
-async function renderCookiesModal() {
-  const list = document.getElementById('cookies-list');
-  list.innerHTML = `<p class="muted">Loading…</p>`;
-
+// Refreshes the in-memory _cookieJar cache from /api/cookies — used both by
+// the Cookie Jar modal and the computed "Cookie" header preview on the Headers tab.
+async function refreshCookieJar() {
   try {
     const res  = await fetch('/api/cookies');
     const data = await res.json();
     _cookieJar = data.cookies || [];
-  } catch (e) {
-    list.innerHTML = `<p class="muted">Failed to load cookies: ${esc(e.message)}</p>`;
-    return;
-  }
+  } catch { /* keep stale cache on failure */ }
+  return _cookieJar;
+}
+
+async function renderCookiesModal() {
+  const list = document.getElementById('cookies-list');
+  list.innerHTML = `<p class="muted">Loading…</p>`;
+
+  await refreshCookieJar();
 
   if (!_cookieJar.length) {
     list.innerHTML = `<p class="muted">No cookies stored yet.</p>`;
