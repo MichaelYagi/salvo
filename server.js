@@ -169,12 +169,29 @@ function buildDigestHeader({ username, password }, method, uri, { realm, nonce, 
   return h;
 }
 
+// Sorts by the `order` field saveData() stamps onto each request file
+// (its index within its containing list at save time). Items missing
+// `order` (e.g. hand-edited files) sort after ordered ones, in file order.
+function byOrder(a, b) {
+  const ao = a._order, bo = b._order;
+  if (ao == null && bo == null) return 0;
+  if (ao == null) return 1;
+  if (bo == null) return -1;
+  return ao - bo;
+}
+
 // ─── Build {cols, envs, hist} from a flat list of {path, content} files ───────
 // `path` looks like "<Collection>/<Request>.json" or "_salvo/envs.json", mirroring
 // the on-disk layout of data/. Used by both loadData() and the zip/folder import.
+//
+// Two extra files carry ordering info that can't live on a request:
+//  - "<Collection>/_meta.json"  -> { folders: [<folder names in order>] }, also
+//    used to persist folders that have no requests in them (and thus no files).
+//  - "_salvo/colOrder.json"     -> [<collection dir names in order>]
 function buildColsFromFiles(files) {
   const colsMap = new Map();
-  let envs, hist;
+  const folderOrders = new Map(); // dir -> [folder names]
+  let envs, hist, colOrder;
 
   for (const { path: relPath, content } of files) {
     const parts = relPath.split('/').filter(Boolean);
@@ -185,6 +202,22 @@ function buildColsFromFiles(files) {
     if (dir === '_salvo') {
       if (fileName === 'envs.json')    { try { envs = JSON.parse(content); } catch {} }
       if (fileName === 'history.json') { try { hist = JSON.parse(content); } catch {} }
+      if (fileName === 'colOrder.json') { try { colOrder = JSON.parse(content); } catch {} }
+      continue;
+    }
+
+    const getCol = () => {
+      let col = colsMap.get(dir);
+      if (!col) { col = { name: dir, requests: [], folders: new Map() }; colsMap.set(dir, col); }
+      return col;
+    };
+
+    if (fileName === '_meta.json') {
+      try {
+        const meta = JSON.parse(content);
+        if (Array.isArray(meta.folders)) folderOrders.set(dir, meta.folders);
+      } catch {}
+      getCol();
       continue;
     }
 
@@ -192,10 +225,9 @@ function buildColsFromFiles(files) {
     try { raw = JSON.parse(content); } catch { continue; }
     if (!raw || typeof raw !== 'object') continue;
 
-    let col = colsMap.get(dir);
-    if (!col) { col = { name: dir, requests: [], folders: new Map() }; colsMap.set(dir, col); }
-
-    const { folder, ...request } = raw;
+    const col = getCol();
+    const { folder, order, ...request } = raw;
+    request._order = order;
     if (folder) {
       let fl = col.folders.get(folder);
       if (!fl) { fl = { name: folder, requests: [] }; col.folders.set(folder, fl); }
@@ -205,9 +237,33 @@ function buildColsFromFiles(files) {
     }
   }
 
-  const cols = [...colsMap.values()].map(c => ({
-    name: c.name, requests: c.requests, folders: [...c.folders.values()],
-  }));
+  const cols = [...colsMap.entries()].map(([dir, c]) => {
+    c.requests.sort(byOrder);
+    c.requests.forEach(r => delete r._order);
+
+    // Order folders per _meta.json, including empty folders that have no
+    // request files; any folder not listed there (e.g. legacy data, or
+    // imports with no _meta.json) is appended in first-seen order.
+    const known = folderOrders.get(dir) || [];
+    for (const name of known) if (!c.folders.has(name)) c.folders.set(name, { name, requests: [] });
+    const names = [...c.folders.keys()];
+    const order = [...known.filter(n => c.folders.has(n)), ...names.filter(n => !known.includes(n))];
+
+    const folders = order.map(name => {
+      const f = c.folders.get(name);
+      f.requests.sort(byOrder);
+      f.requests.forEach(r => delete r._order);
+      return f;
+    });
+
+    return { name: dir, requests: c.requests, folders };
+  });
+
+  if (Array.isArray(colOrder)) {
+    const names = cols.map(c => c.name);
+    const order = [...colOrder.filter(n => names.includes(n)), ...names.filter(n => !colOrder.includes(n))];
+    cols.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+  }
 
   return { cols, envs, hist };
 }
@@ -295,22 +351,28 @@ function saveData(payload) {
     }
 
     const used = new Set();
-    const writeReq = (req, folderName) => {
+    const writeReq = (req, folderName, order) => {
       const fileName = uniqueName(sanitizeName(req.name), used) + '.json';
       const { id, ...rest } = req;
-      const data = folderName ? { ...rest, folder: folderName } : rest;
+      const data = folderName ? { ...rest, folder: folderName, order } : { ...rest, order };
       fs.writeFileSync(path.join(colDir, fileName), JSON.stringify(data, null, 2));
     };
 
-    (col.requests || []).forEach(r => writeReq(r, null));
-    (col.folders  || []).forEach(f => (f.requests || []).forEach(r => writeReq(r, f.name)));
+    (col.requests || []).forEach((r, i) => writeReq(r, null, i));
+    (col.folders  || []).forEach(f => (f.requests || []).forEach((r, i) => writeReq(r, f.name, i)));
+
+    // Folders aren't directories, so their order (and the existence of empty
+    // folders, which have no request files) is persisted here separately.
+    fs.writeFileSync(path.join(colDir, '_meta.json'),
+      JSON.stringify({ folders: (col.folders || []).map(f => f.name) }, null, 2));
   }
 
   fs.mkdirSync(SALVO_DIR, { recursive: true });
-  fs.writeFileSync(path.join(SALVO_DIR, 'envs.json'),    JSON.stringify({ activeEnv, list: envs }, null, 2));
-  fs.writeFileSync(path.join(SALVO_DIR, 'globals.json'), JSON.stringify(globals, null, 2));
-  fs.writeFileSync(path.join(SALVO_DIR, 'history.json'), JSON.stringify(hist.slice(-200), null, 2));
-  fs.writeFileSync(path.join(SALVO_DIR, 'tabs.json'),    JSON.stringify({ openTabs, activeIndex }, null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'envs.json'),     JSON.stringify({ activeEnv, list: envs }, null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'globals.json'),  JSON.stringify(globals, null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'history.json'),  JSON.stringify(hist.slice(-200), null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'tabs.json'),     JSON.stringify({ openTabs, activeIndex }, null, 2));
+  fs.writeFileSync(path.join(SALVO_DIR, 'colOrder.json'), JSON.stringify(cols.map(c => sanitizeName(c.name)), null, 2));
 }
 
 // ─── Mock server ────────────────────────────────────────────────────────────────

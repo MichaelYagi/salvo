@@ -167,6 +167,71 @@ test('saveData wipes a collection\'s old request files when a request is renamed
   assert.ok(fs.existsSync(path.join(DATA_DIR, 'A', 'New Name.json')));
 });
 
+test('saveData stamps each request with its array index as `order`, and loadData sorts by it', () => {
+  resetData();
+
+  // Write requests/folders in one order...
+  saveData({
+    cols: [{
+      name: 'A',
+      requests: [{ name: 'Charlie' }, { name: 'Alice' }, { name: 'Bob' }],
+      folders: [{ name: 'F', requests: [{ name: 'Z' }, { name: 'Y' }] }],
+    }],
+    envs: [], hist: [],
+  });
+
+  const charlie = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'A', 'Charlie.json'), 'utf8'));
+  const alice   = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'A', 'Alice.json'), 'utf8'));
+  assert.strictEqual(charlie.order, 0);
+  assert.strictEqual(alice.order, 1);
+
+  // ... shuffle the on-disk files by renaming so directory order no longer
+  // matches `order` (simulates readdir() returning a different order) ...
+  fs.renameSync(path.join(DATA_DIR, 'A', 'Alice.json'), path.join(DATA_DIR, 'A', 'AAA-renamed.json'));
+
+  // ... loadData() should still return them sorted by the stored `order`, not filename.
+  const loaded = loadData();
+  assert.deepStrictEqual(loaded.cols[0].requests.map(r => r.name), ['Charlie', 'Alice', 'Bob']);
+  assert.deepStrictEqual(loaded.cols[0].folders[0].requests.map(r => r.name), ['Z', 'Y']);
+});
+
+test('saveData writes a per-collection _meta.json that preserves folder order and empty folders', () => {
+  resetData();
+
+  saveData({
+    cols: [{
+      name: 'A',
+      requests: [],
+      folders: [
+        { name: 'Empty Folder', requests: [] },
+        { name: 'Has Requests', requests: [{ name: 'Req' }] },
+      ],
+    }],
+    envs: [], hist: [],
+  });
+
+  const meta = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'A', '_meta.json'), 'utf8'));
+  assert.deepStrictEqual(meta.folders, ['Empty Folder', 'Has Requests']);
+
+  const loaded = loadData();
+  assert.deepStrictEqual(loaded.cols[0].folders.map(f => f.name), ['Empty Folder', 'Has Requests']);
+  assert.deepStrictEqual(loaded.cols[0].folders[0].requests, []);
+  assert.strictEqual(loaded.cols[0].folders[1].requests[0].name, 'Req');
+});
+
+test('saveData writes _salvo/colOrder.json and loadData sorts collections by it', () => {
+  resetData();
+
+  saveData({ cols: [{ name: 'Alpha', requests: [], folders: [] }, { name: 'Beta', requests: [], folders: [] }], envs: [], hist: [] });
+  const colOrder = JSON.parse(fs.readFileSync(path.join(DATA_DIR, '_salvo', 'colOrder.json'), 'utf8'));
+  assert.deepStrictEqual(colOrder, ['Alpha', 'Beta']);
+
+  // Re-save with the collections swapped — colOrder.json (and thus load order) should follow.
+  saveData({ cols: [{ name: 'Beta', requests: [], folders: [] }, { name: 'Alpha', requests: [], folders: [] }], envs: [], hist: [] });
+  const loaded = loadData();
+  assert.deepStrictEqual(loaded.cols.map(c => c.name), ['Beta', 'Alpha']);
+});
+
 test('parseDigestChallenge parses quoted and unquoted directives', () => {
   const out = parseDigestChallenge('Digest realm="testrealm@host.com", qop="auth", nonce="abc123", opaque="xyz", algorithm=MD5');
   assert.deepStrictEqual(out, { realm: 'testrealm@host.com', qop: 'auth', nonce: 'abc123', opaque: 'xyz', algorithm: 'MD5' });

@@ -283,6 +283,64 @@ function deleteReqs(ids) {
   scheduleDiskSave();
 }
 
+// ─── Drag & drop reordering ───────────────────────────────────────────────────
+// Persisted ordering lives in the array order of state.cols[].requests and
+// state.cols[].folders[].requests/folders themselves — server.js writes each
+// request's array index as its `order` field (and a per-collection _meta.json
+// for folder order/existence) on save, and sorts by that on load. So reordering
+// here is just splicing these arrays; scheduleDiskSave() persists the new order.
+
+// Finds the {list, index} of the array (a collection's or folder's `requests`)
+// that currently contains the request `id`.
+function findReqContainer(id) {
+  for (const col of state.cols) {
+    let idx = col.requests.findIndex(r => r.id === id);
+    if (idx !== -1) return { list: col.requests, index: idx };
+    for (const f of col.folders) {
+      idx = f.requests.findIndex(r => r.id === id);
+      if (idx !== -1) return { list: f.requests, index: idx };
+    }
+  }
+  return null;
+}
+
+// Moves request `id` out of its current list and into `targetList` at
+// `targetIndex` (an index within `targetList` as it exists *before* removal).
+function moveReqToPosition(id, targetList, targetIndex) {
+  const src = findReqContainer(id);
+  if (!src) return;
+  const [req] = src.list.splice(src.index, 1);
+  let idx = targetIndex;
+  if (src.list === targetList && src.index < targetIndex) idx--;
+  targetList.splice(idx, 0, req);
+}
+
+// Reorders folder `folderId` within its collection to `targetIndex` (an index
+// within col.folders as it exists *before* removal). Folders only reorder
+// within their own collection — moving a folder to a different collection
+// isn't supported.
+function moveFolderToPosition(colId, folderId, targetIndex) {
+  const col = state.cols.find(c => c.id === colId);
+  if (!col) return;
+  const srcIdx = col.folders.findIndex(f => f.id === folderId);
+  if (srcIdx === -1) return;
+  const [folder] = col.folders.splice(srcIdx, 1);
+  let idx = targetIndex;
+  if (srcIdx < targetIndex) idx--;
+  col.folders.splice(idx, 0, folder);
+}
+
+// Reorders collection `colId` within state.cols to `targetIndex` (an index
+// within state.cols as it exists *before* removal).
+function moveColToPosition(colId, targetIndex) {
+  const srcIdx = state.cols.findIndex(c => c.id === colId);
+  if (srcIdx === -1) return;
+  const [col] = state.cols.splice(srcIdx, 1);
+  let idx = targetIndex;
+  if (srcIdx < targetIndex) idx--;
+  state.cols.splice(idx, 0, col);
+}
+
 // ─── Backup export / import (all collections, as plain JSON) ──────────────────
 
 // Exports every collection (requests + folders) and environment as a single

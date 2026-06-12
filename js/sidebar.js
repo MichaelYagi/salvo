@@ -131,7 +131,7 @@ function renderSearchResults(list, query) {
     return;
   }
 
-  matches.forEach(({ r }) => list.insertAdjacentHTML('beforeend', reqRowHTML(r, 6)));
+  matches.forEach(({ r }) => list.insertAdjacentHTML('beforeend', reqRowHTML(r, 6, false)));
 }
 
 // ─── Collection HTML ──────────────────────────────────────────────────────────
@@ -141,14 +141,17 @@ function colHTML(col) {
 
   let html = `
     <div style="position:relative">
-      <div class="col-header" onclick="toggleCol('${col.id}')" oncontextmenu="colCtx(event,'${col.id}')">
+      <div class="col-header" draggable="true" onclick="toggleCol('${col.id}')" oncontextmenu="colCtx(event,'${col.id}')"
+          ondragstart="onDragStart(event,'col','${col.id}')"
+          ondragover="onColHeaderDragOver(event,'${col.id}')" ondragleave="onDragLeave(event)"
+          ondrop="onColHeaderDrop(event,'${col.id}')" ondragend="onDragEnd(event)">
         <span class="col-arrow ${open ? 'open' : ''}">&#9654;</span>
         <span class="col-name">${esc(col.name)}</span>
         <button class="col-add" onclick="event.stopPropagation();addReq('${col.id}')" title="New request">+</button>
       </div>`;
 
   if (open) {
-    html += `<div class="col-body">`;
+    html += `<div class="col-body" ondragover="onColHeaderDragOver(event,'${col.id}')" ondragleave="onDragLeave(event)" ondrop="onColHeaderDrop(event,'${col.id}')">`;
     col.folders.forEach(folder => { html += folderHTML(col.id, folder); });
     col.requests.forEach(r => { html += reqRowHTML(r, 6); });
     html += `</div>`;
@@ -162,7 +165,10 @@ function folderHTML(colId, folder) {
   const open = state.expandedFolders.has(folder.id);
 
   let html = `
-    <div class="folder-header" onclick="toggleFolder('${folder.id}')" oncontextmenu="folderCtx(event,'${colId}','${folder.id}')">
+    <div class="folder-header" draggable="true" onclick="toggleFolder('${folder.id}')" oncontextmenu="folderCtx(event,'${colId}','${folder.id}')"
+        ondragstart="onDragStart(event,'folder','${folder.id}')"
+        ondragover="onFolderHeaderDragOver(event,'${colId}','${folder.id}')" ondragleave="onDragLeave(event)"
+        ondrop="onFolderHeaderDrop(event,'${colId}','${folder.id}')" ondragend="onDragEnd(event)">
       <span class="col-arrow ${open ? 'open' : ''}">&#9654;</span>
       <span style="font-size:13px">&#128193;</span>
       <span class="folder-name">${esc(folder.name)}</span>
@@ -176,19 +182,169 @@ function folderHTML(colId, folder) {
   return html;
 }
 
-function reqRowHTML(r, indent) {
+function reqRowHTML(r, indent, draggable = true) {
   const active   = activeTab()?.reqId === r.id;
   const selected = state.selectedReqIds.has(r.id);
   const color    = MC[r.method] || 'var(--text)';
 
+  const dragAttrs = draggable
+    ? `draggable="true" ondragstart="onDragStart(event,'req','${r.id}')"
+       ondragover="onReqRowDragOver(event,'${r.id}')" ondragleave="onDragLeave(event)"
+       ondrop="onReqRowDrop(event,'${r.id}')" ondragend="onDragEnd(event)"`
+    : '';
+
   return `
     <div class="req-row ${active ? 'active' : ''} ${selected ? 'selected' : ''}" style="padding-left:${indent + 8}px;position:relative"
+        ${dragAttrs}
         onclick="reqClick(event,'${r.id}')" oncontextmenu="reqCtx(event,'${r.id}')">
       <span class="req-check">${selected ? '&#10003;' : ''}</span>
       <span class="req-method" style="color:${color}">${r.method}</span>
       <span class="req-name ${active ? 'active' : ''}">${esc(r.name)}</span>
       <button class="req-menu-btn" onclick="event.stopPropagation();reqCtx(event,'${r.id}')">&#8942;</button>
     </div>`;
+}
+
+// ─── Drag & drop ──────────────────────────────────────────────────────────────
+// Reordering/moving requests, folders, and collections via drag-and-drop in
+// the sidebar. _dragType/_dragId track what's being dragged; moveReqToPosition()/
+// moveFolderToPosition()/moveColToPosition() (js/collections.js) do the actual
+// array splicing, which server.js persists as each item's `order` (_meta.json
+// for folders, colOrder.json for collections) on the next save.
+let _dragType = null; // 'req' | 'folder' | 'col'
+let _dragId   = null;
+
+function onDragStart(event, type, id) {
+  _dragType = type;
+  _dragId   = id;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', id);
+}
+
+function onDragEnd() {
+  _dragType = null;
+  _dragId   = null;
+  document.querySelectorAll('.drag-over-top,.drag-over-bottom,.drag-target')
+    .forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-target'));
+}
+
+function onDragLeave(event) {
+  event.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-target');
+}
+
+// Dropping a request onto another request row reorders it before/after the
+// target (within the same list) or moves it into the target's list.
+function onReqRowDragOver(event, reqId) {
+  if (_dragType !== 'req' || _dragId === reqId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.dataTransfer.dropEffect = 'move';
+  const el     = event.currentTarget;
+  const before = (event.clientY - el.getBoundingClientRect().top) < el.offsetHeight / 2;
+  el.classList.toggle('drag-over-top', before);
+  el.classList.toggle('drag-over-bottom', !before);
+}
+
+function onReqRowDrop(event, reqId) {
+  if (_dragType !== 'req' || _dragId === reqId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const el     = event.currentTarget;
+  const before = el.classList.contains('drag-over-top');
+  el.classList.remove('drag-over-top', 'drag-over-bottom');
+
+  const target = findReqContainer(reqId);
+  if (!target) return;
+  moveReqToPosition(_dragId, target.list, before ? target.index : target.index + 1);
+  renderSidebar();
+  scheduleDiskSave();
+}
+
+// Dropping a request onto a folder header moves it into that folder.
+// Dropping another folder header onto it reorders folders within the collection.
+function onFolderHeaderDragOver(event, colId, folderId) {
+  if (!_dragType) return;
+  if (_dragType === 'folder' && _dragId === folderId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.dataTransfer.dropEffect = 'move';
+  const el = event.currentTarget;
+  if (_dragType === 'folder') {
+    const before = (event.clientY - el.getBoundingClientRect().top) < el.offsetHeight / 2;
+    el.classList.toggle('drag-over-top', before);
+    el.classList.toggle('drag-over-bottom', !before);
+  } else {
+    el.classList.add('drag-target');
+  }
+}
+
+function onFolderHeaderDrop(event, colId, folderId) {
+  if (!_dragType) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const el = event.currentTarget;
+  el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-target');
+
+  const col = state.cols.find(c => c.id === colId);
+  if (!col) return;
+
+  if (_dragType === 'req') {
+    const folder = col.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    moveReqToPosition(_dragId, folder.requests, folder.requests.length);
+    state.expandedCols.add(colId);
+    state.expandedFolders.add(folderId);
+  } else if (_dragType === 'folder') {
+    if (_dragId === folderId) return;
+    const before    = el.classList.contains('drag-over-top');
+    const targetIdx = col.folders.findIndex(f => f.id === folderId);
+    moveFolderToPosition(colId, _dragId, before ? targetIdx : targetIdx + 1);
+  } else {
+    return;
+  }
+
+  renderSidebar();
+  scheduleDiskSave();
+}
+
+// Dropping a request onto a collection's header or empty body area moves it
+// to that collection's top level (appended at the end). Dropping another
+// collection header onto it reorders collections.
+function onColHeaderDragOver(event, colId) {
+  if (_dragType === 'col' && _dragId === colId) return;
+  if (_dragType !== 'req' && _dragType !== 'col') return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  const el = event.currentTarget;
+  if (_dragType === 'col') {
+    const before = (event.clientY - el.getBoundingClientRect().top) < el.offsetHeight / 2;
+    el.classList.toggle('drag-over-top', before);
+    el.classList.toggle('drag-over-bottom', !before);
+  } else {
+    el.classList.add('drag-target');
+  }
+}
+
+function onColHeaderDrop(event, colId) {
+  if (_dragType === 'col' && _dragId === colId) return;
+  if (_dragType !== 'req' && _dragType !== 'col') return;
+  event.preventDefault();
+  event.stopPropagation();
+  const el = event.currentTarget;
+  const before = el.classList.contains('drag-over-top');
+  el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-target');
+
+  if (_dragType === 'req') {
+    const col = state.cols.find(c => c.id === colId);
+    if (!col) return;
+    moveReqToPosition(_dragId, col.requests, col.requests.length);
+    state.expandedCols.add(colId);
+  } else {
+    const targetIdx = state.cols.findIndex(c => c.id === colId);
+    moveColToPosition(_dragId, before ? targetIdx : targetIdx + 1);
+  }
+
+  renderSidebar();
+  scheduleDiskSave();
 }
 
 // ─── Toggle expand / collapse ─────────────────────────────────────────────────

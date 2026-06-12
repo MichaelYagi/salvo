@@ -186,3 +186,89 @@ test('normalizeReq defaults description, comments, mock, and examples for older 
   assert.deepEqual(withSaved.mock, { enabled: true, status: 201, headers: [], body: '', delay: 0 });
   assert.strictEqual(withSaved.examples.length, 1);
 });
+
+// ─── Drag & drop reordering ────────────────────────────────────────────────────
+
+function dndCols() {
+  return [
+    {
+      id: 'c1', name: 'Col A',
+      requests: [{ id: 'r1', name: 'R1' }, { id: 'r2', name: 'R2' }, { id: 'r3', name: 'R3' }],
+      folders: [
+        { id: 'f1', name: 'Folder 1', requests: [{ id: 'r4', name: 'R4' }, { id: 'r5', name: 'R5' }] },
+        { id: 'f2', name: 'Folder 2', requests: [] },
+      ],
+    },
+    { id: 'c2', name: 'Col B', requests: [{ id: 'r6', name: 'R6' }], folders: [] },
+  ];
+}
+
+test('findReqContainer locates a request\'s list and index across collections/folders', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.cols = dndCols();
+
+  const r2 = sandbox.findReqContainer('r2');
+  assert.strictEqual(r2.list, sandbox.state.cols[0].requests);
+  assert.strictEqual(r2.index, 1);
+
+  const r5 = sandbox.findReqContainer('r5');
+  assert.strictEqual(r5.list, sandbox.state.cols[0].folders[0].requests);
+  assert.strictEqual(r5.index, 1);
+
+  assert.strictEqual(sandbox.findReqContainer('nope'), null);
+});
+
+test('moveReqToPosition reorders within the same list', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.cols = dndCols();
+  const col = sandbox.state.cols[0];
+
+  // Drag R3 to before R1
+  sandbox.moveReqToPosition('r3', col.requests, 0);
+  assert.deepStrictEqual(col.requests.map(r => r.id), ['r3', 'r1', 'r2']);
+});
+
+test('moveReqToPosition moves a request into a folder', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.cols = dndCols();
+  const col = sandbox.state.cols[0];
+
+  // Drag top-level R1 into the (empty) Folder 2
+  sandbox.moveReqToPosition('r1', col.folders[1].requests, col.folders[1].requests.length);
+  assert.deepStrictEqual(col.requests.map(r => r.id), ['r2', 'r3']);
+  assert.deepStrictEqual(col.folders[1].requests.map(r => r.id), ['r1']);
+});
+
+test('moveReqToPosition moves a request to a different collection', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.cols = dndCols();
+  const [colA, colB] = sandbox.state.cols;
+
+  sandbox.moveReqToPosition('r4', colB.requests, colB.requests.length);
+  assert.deepStrictEqual(colA.folders[0].requests.map(r => r.id), ['r5']);
+  assert.deepStrictEqual(colB.requests.map(r => r.id), ['r6', 'r4']);
+});
+
+test('moveFolderToPosition reorders folders within a collection', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.cols = dndCols();
+  const col = sandbox.state.cols[0];
+
+  // Drag Folder 2 to before Folder 1
+  sandbox.moveFolderToPosition('c1', 'f2', 0);
+  assert.deepStrictEqual(col.folders.map(f => f.id), ['f2', 'f1']);
+});
+
+test('moveColToPosition reorders collections', () => {
+  const sandbox = loadSandbox();
+  sandbox.state.cols = dndCols();
+
+  // Drag Col B to before Col A
+  sandbox.moveColToPosition('c2', 0);
+  assert.deepStrictEqual(sandbox.state.cols.map(c => c.id), ['c2', 'c1']);
+
+  // Dropping a collection onto itself is a no-op (handled by callers, but
+  // verify the splice math doesn't corrupt the array if it ever happens)
+  sandbox.moveColToPosition('c2', 0);
+  assert.deepStrictEqual(sandbox.state.cols.map(c => c.id), ['c2', 'c1']);
+});
