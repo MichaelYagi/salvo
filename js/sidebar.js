@@ -91,14 +91,17 @@ function renderSidebar() {
 
   clearBtn.style.display = query ? '' : 'none';
 
-  list.innerHTML = state.selectedReqIds.size ? selBannerHTML() : '';
+  list.innerHTML = '';
 
   if (query) {
     renderSearchResults(list, query);
-    return;
+  } else {
+    state.cols.forEach(col => list.insertAdjacentHTML('beforeend', colHTML(col)));
   }
 
-  state.cols.forEach(col => list.insertAdjacentHTML('beforeend', colHTML(col)));
+  // Appended last and pinned to the bottom of the scroll area (sticky), so
+  // showing it doesn't shift the rows above — including the ones just selected.
+  if (state.selectedReqIds.size) list.insertAdjacentHTML('beforeend', selBannerHTML());
 }
 
 function selBannerHTML() {
