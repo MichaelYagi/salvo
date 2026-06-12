@@ -143,7 +143,7 @@ function updateTestsBadge(resp) {
 function copyResponse() {
   const resp = activeTab()?.resp;
   if (resp?.body) {
-    navigator.clipboard.writeText(resp.body).then(() => notify('Copied', 'success'));
+    copyText(resp.body).then(() => notify('Copied', 'success'));
   }
 }
 

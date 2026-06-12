@@ -157,3 +157,27 @@ function notify(msg, type = 'info') {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3200);
 }
+
+/**
+ * Copy text to the clipboard. `navigator.clipboard` is only available in
+ * secure contexts (HTTPS or localhost) — on a plain http:// LAN address
+ * (e.g. accessing Salvo via another machine's IP) it's undefined, so fall
+ * back to a hidden textarea + execCommand('copy').
+ */
+function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity  = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } finally {
+    ta.remove();
+  }
+  return Promise.resolve();
+}

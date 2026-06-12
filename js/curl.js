@@ -128,11 +128,11 @@ function curlPanelHTML() {
 function copyCurl() {
   const cmd = buildCurl();
   if (!cmd) return;
-  navigator.clipboard.writeText(cmd).then(() => notify('curl copied', 'success'));
+  copyText(cmd).then(() => notify('curl copied', 'success'));
 }
 
 function copyMockCurl() {
   const cmd = buildMockCurl();
   if (!cmd) return;
-  navigator.clipboard.writeText(cmd).then(() => notify('mock curl copied', 'success'));
+  copyText(cmd).then(() => notify('mock curl copied', 'success'));
 }
