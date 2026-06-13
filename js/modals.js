@@ -190,6 +190,16 @@ function getSelEnv() {
   return state.envs.find(e => e.id === state.envSelId) ?? null;
 }
 
+// ─── About Modal ──────────────────────────────────────────────────────────────
+
+function openAboutModal() {
+  document.getElementById('about-modal').style.display = 'flex';
+}
+
+function closeAboutModal() {
+  document.getElementById('about-modal').style.display = 'none';
+}
+
 // ─── Cookie Jar Modal ─────────────────────────────────────────────────────────
 
 let _cookieJar = [];

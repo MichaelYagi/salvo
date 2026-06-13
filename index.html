@@ -33,8 +33,10 @@
   <!-- ── Topbar ─────────────────────────────────────────────────────────── -->
   <div id="topbar">
     <button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
-    <img src="img/favicon.svg" alt="" width="20" height="20" style="vertical-align:middle;border-radius:4px;margin-right:6px">
-    <span class="logo">Salvo</span>
+    <button id="about-btn" onclick="openAboutModal()" title="About Salvo" style="display:flex;align-items:center;gap:6px;padding:0;background:none">
+      <img src="img/favicon.svg" alt="" width="20" height="20" style="vertical-align:middle;border-radius:4px">
+      <span class="logo">Salvo</span>
+    </button>
     <span class="tb-div">|</span>
     <select id="env-select" style="width:150px;padding:3px 7px;font-size:12px" onchange="envQuickSwitch(this.value)"></select>
     <button onclick="openEnvModal()">Manage Env</button>
@@ -247,6 +249,43 @@
       <button id="mock-stop-btn" onclick="stopMock()" style="color:var(--danger);display:none">Stop</button>
       <button id="mock-start-btn" class="btn-primary" onclick="startMock()">Start</button>
       <button onclick="closeMockModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── About Modal ───────────────────────────────────────────────────────── -->
+<div id="about-modal" class="modal-bg" style="display:none"
+     onclick="if(event.target===this)closeAboutModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>About Salvo</h3>
+    <p>Salvo is a local-first HTTP client — a lightweight Postman alternative. It runs
+       entirely on your machine: collections, environments, and history are stored as
+       plain JSON files on disk, with no account, cloud sync, or telemetry. Postman
+       collections and environments can be imported directly via the Import button.</p>
+    <label>License (MIT)</label>
+    <pre style="white-space:pre-wrap;font-family:monospace;font-size:11px;line-height:1.5;color:var(--text-muted);background:var(--bg-input);border-radius:6px;padding:10px;max-height:220px;overflow-y:auto;margin-bottom:12px">MIT License
+
+Copyright (c) 2026 Michael Yagi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeAboutModal()">Close</button>
     </div>
   </div>
 </div>

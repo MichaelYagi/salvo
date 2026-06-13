@@ -1,12 +1,16 @@
 # Salvo
 
-A local-first HTTP client. No cloud, no accounts, no telemetry. Just a small Node server and some HTML/JS/CSS.
+A fast, free, local-first HTTP client — the core Postman workflow you already know, without the account walls, forced cloud sync, telemetry, or subscription nags.
 
-Built as a clean-room alternative to Postman — same core workflow, none of the lock-in.
+Salvo is just a small Node server and some plain HTML/JS/CSS. Clone it, run one command, and you have a full-featured API client: collections and folders, environments and globals, OAuth2/JWT/Digest auth, pre-request and test scripts, a collection runner with CSV/JSON data-driven runs, a mock server, a cookie jar, and one-click cURL — all working offline, all stored as plain JSON files you fully own. Import your existing Postman collections and environments and you're up and running in minutes.
+
+No npm install, no Docker, no sign-up, no rate limits, no paywalled "team" features. MIT licensed — use it, fork it, ship it.
 
 ## Features
 
-- **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format.
+- **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format. Right-click a request to rename, duplicate, copy its URL, move it, or delete it; right-click a collection or folder to add requests/folders, run them, edit a description, rename, export, or delete.
+- **Sidebar search & multi-select** — filter the sidebar by request name or URL as you type. `Ctrl`/`Cmd`-click or `Shift`-click to select multiple requests, then move or delete them all at once.
+- **Drag-and-drop organization** — reorder requests and folders within a collection, move a request into a folder, or reorder collections and folders themselves by dragging their rows.
 - **Multi-tab editing** — open several requests at once in browser-style tabs above the editor; each tab keeps its own edits, response, and active sub-tab.
 - **Full request editing** — method, URL, query params, headers, auth, and body (raw JSON/XML/text, form-data with file uploads, x-www-form-urlencoded, raw binary)
 - **URL ↔ Params sync** — editing the URL's query string updates the Params table and vice versa, like Postman.
@@ -31,8 +35,11 @@ Built as a clean-room alternative to Postman — same core workflow, none of the
 - **Request history** — every sent request logged with method, status, and timing; click to replay
 - **Per-request tab memory** — remembers which tab (Params/Headers/Auth/Body/cURL) you last had open for each request
 - **CORS-free sending** — requests are proxied through the local server, so the browser never makes the cross-origin call directly
-- **Export / Import** — export all collections to a single JSON file, share it with a team, and import it elsewhere. Imports merge with existing collections by name and skip requests with duplicate names.
+- **Color themes** — pick Dark, Light, Nord, or Carnival from the topbar theme picker; your choice is remembered per device.
+- **Responsive layout** — on narrow/tablet/phone widths, the sidebar collapses behind a `☰` toggle and slides over the request panel.
+- **Export / Import** — export all collections to a single JSON file (or a single collection, as Salvo or Postman v2.1.0 JSON, via its right-click menu), share it with a team, and import it elsewhere. Imports accept a Salvo export, a Postman collection, or a Postman environment, and merge with existing collections/environments by name, skipping requests with duplicate names.
 - **Auto-save** — every change is saved to disk automatically (debounced), with a save-status indicator in the topbar. `Ctrl+S`/`Cmd+S` still works for an explicit save.
+- **About** — click the Salvo logo/title in the topbar for an About modal with a short description and the MIT license text.
 
 ## Running it
 
@@ -69,7 +76,7 @@ salvo/
 ├── index.html               — markup only, no inline JS or CSS
 ├── css/
 │   ├── base.css            — reset, layout shell, form controls, buttons, tabs, spinner
-│   ├── themes.css          — Dark/Light/Nord theme variable sets
+│   ├── themes.css          — Dark/Light/Nord/Carnival theme variable sets
 │   ├── sidebar.css         — sidebar, resizer, collection/folder/request rows, context menu
 │   ├── request.css         — URL bar, KV editor, auth editor, body editor, bulk edit
 │   ├── response.css        — response panel, status badge, JSON tree, history panel
@@ -281,11 +288,14 @@ Opening a request from the sidebar opens it in a new tab (or focuses its existin
 
 ## Export / Import
 
-The **Export** button (topbar) downloads a `salvo-export.json` containing all collections, folders, and requests (no environments or history — keep those local/private).
+The **Export** button (topbar) downloads a `salvo-export.json` containing all collections, folders, requests, and environments (history is left out — it's local clutter, not something worth sharing).
 
-The **Import** button accepts either:
-- A Salvo export (`{ "cols": [...] }`) — merged into your existing collections, matching by collection/folder name and skipping any request whose name already exists
-- A Postman v2.x collection — added as a new collection
+A single collection can also be exported on its own via its right-click menu, as either a Salvo JSON file (**Export JSON**) or a Postman v2.1.0 collection (**Export as Postman**) — handy for sharing one collection with someone still on Postman.
+
+The **Import** button accepts any of:
+- A Salvo export (`{ "cols": [...], "envs": [...] }`) — collections/folders are merged into your existing ones by name (skipping any request whose name already exists), and environments are merged by name, var-by-var (existing vars are left untouched)
+- A Postman v2.x collection — added as a new collection; any collection-level Postman variables are imported as an environment named after the collection
+- A Postman environment export — merged into a matching (or newly created) environment by name
 
 ## Tests
 
@@ -300,9 +310,14 @@ Runs the test suite with Node's built-in test runner — no dependencies needed 
 - `test/collections.test.js` — `parsePostman` and `mergeImportedData` (including collection descriptions) and `normalizeReq`'s defaults for description/comments/mock/examples, run in a sandboxed copy of the global-scope frontend JS
 - `test/request.test.js` — path variables, computed-headers preview, the KV editor (including bulk edit and form-data file rows), the binary body type, `{{variable}}` autocomplete (including global variable fallback and Collection Runner row data), `extractMockPath`, and the Docs/Examples/Mock tabs and badges, run in a sandboxed copy of the global-scope frontend JS
 - `test/runner.test.js` — Collection Runner CSV/JSON data file parsing (`parseCsv`, `parseCsvLine`, `parseRunnerDataFile`), run in a sandboxed copy of the global-scope frontend JS
+- `test/curl.test.js` — `buildCurl`'s method/URL/header rendering, and `curlPanelHTML`'s mock-server section (hidden when mocking is disabled or the mock server isn't running, rendered with a working mock-server curl command when it is), run in a sandboxed copy of the global-scope frontend JS
 
 Run `node --test --experimental-test-coverage` for a coverage report (covers `server.js`; the sandboxed frontend tests aren't included in coverage instrumentation).
 
 ## No build step
 
 Pure HTML, CSS, and JavaScript on the front end, plus a single stdlib-only Node server. No framework, no bundler, no package manager. Edit any file and refresh.
+
+## License
+
+[MIT](LICENSE) — © 2026 Michael Yagi.
