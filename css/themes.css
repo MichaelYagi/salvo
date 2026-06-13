@@ -69,6 +69,38 @@
   --json-bool:        #b31d28;
 }
 
+/* "Carnival" — a festive deep-purple theme with gold, pink, and green accents */
+[data-theme="carnival"] {
+  --bg:               #1a1025;
+  --bg-elevated:      #251733;
+  --bg-elevated-2:    #311f42;
+  --bg-input:         #2d1f3d;
+  --border:           #4a2f5e;
+  --border-light:     #6b4380;
+  --text:             #ede4f5;
+  --text-bright:      #ffffff;
+  --text-muted:       #b39ac9;
+  --text-faint:       #6b4380;
+  --placeholder:      #8a6ba3;
+  --accent:           #ffb627;
+  --accent-alpha:     #ffb62722;
+  --accent-contrast:  #1a1025;
+  --selected:         #ff6ec7;
+  --selected-alpha:   #ff6ec744;
+  --selected-bg:      #3a1f3a;
+  --success:          #2ecc71;
+  --success-bg:       #15301f;
+  --danger:           #ff5470;
+  --danger-bg:        #3a1620;
+  --danger-border:    #5e2030;
+  --warning:          #ffb627;
+  --info-bg:          #1f2d40;
+  --json-key:         #7ee8fa;
+  --json-str:         #ffd66b;
+  --json-num:         #ff9f6b;
+  --json-bool:        #ff6ec7;
+}
+
 /* "Nord" — a cool blue-grey dark theme with cyan/teal accents */
 [data-theme="nord"] {
   --bg:               #2e3440;
