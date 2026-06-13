@@ -394,6 +394,12 @@ function folderCtx(event, colId, folderId) {
   ]);
 }
 
+function copyReqLink(reqId) {
+  const r = findReq(reqId);
+  if (!r) return;
+  copyText(r.url).then(() => notify('Link copied', 'success'));
+}
+
 function reqCtx(event, reqId) {
   event.preventDefault();
   event.stopPropagation();
@@ -411,6 +417,7 @@ function reqCtx(event, reqId) {
     ...(!multi ? [
       { label: 'Rename',    action: () => renameReq(reqId) },
       { label: 'Duplicate', action: () => dupReq(reqId) },
+      { label: 'Copy link', action: () => copyReqLink(reqId) },
       'sep',
     ] : []),
     { label: multi ? `Move ${ids.length} requests to…` : 'Move to…',

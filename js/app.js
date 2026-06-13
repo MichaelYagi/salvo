@@ -123,6 +123,10 @@ async function init() {
     notify('Could not load data/: ' + e.message, 'error');
   }
 
+  document.querySelectorAll('#method-select option').forEach(opt => {
+    opt.style.color = MC[opt.value] || 'var(--text)';
+  });
+
   refreshCookieJar();
   refreshMockServerStatus();
   renderEnvSelect();
