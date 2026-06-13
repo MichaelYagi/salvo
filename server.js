@@ -290,6 +290,7 @@ function walkDataDir() {
 function normalizeEnvs(envs) {
   return envs.map(e => ({
     ...e,
+    name: (e.id === 'default' && !e.name) ? 'No Environment' : e.name,
     vars: Array.isArray(e.vars)
       ? e.vars
       : Object.entries(e.vars || {}).map(([key, value]) => ({ id: crypto.randomUUID(), key, value, enabled: true })),
