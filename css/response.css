@@ -83,7 +83,7 @@
 .test-result  { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 .test-result:last-child { border-bottom: none; }
 .test-icon    { display: inline-block; width: 16px; font-weight: 700; }
-.test-result.pass .test-icon { color: #3fb950; }
+.test-result.pass .test-icon { color: var(--success); }
 .test-result.fail .test-icon { color: var(--danger); }
 .test-result.fail .test-name { color: var(--danger); }
 .test-error   { margin: 4px 0 0 22px; color: var(--text-muted); font-family: monospace; font-size: 11px; }

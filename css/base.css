@@ -105,7 +105,6 @@ button:hover { background: var(--bg-input); color: var(--text); }
 
 /* ─── Shared Utilities ─────────────────────────────────────────────────────── */
 .muted         { color: var(--text-faint); }
-.section-label { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 8px; }
 .two-col       { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* ─── Tabs (shared by request and response bars) ───────────────────────────── */

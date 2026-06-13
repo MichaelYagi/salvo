@@ -205,10 +205,7 @@ function renderHistPanel() {
   }
 
   list.innerHTML = [...state.hist].reverse().map((h, i) => {
-    const color = !h.status       ? '#8b949e'
-                : h.status < 300  ? '#3fb950'
-                : h.status < 400  ? '#fca130'
-                :                   '#f85149';
+    const color = statusColor(h.status);
 
     const badge = h.status
       ? `<span class="status-badge" style="background:${color}22;color:${color}">${h.status}</span>`

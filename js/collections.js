@@ -190,10 +190,6 @@ function addReq(colId, folderId = null) {
   scheduleDiskSave();
 }
 
-function deleteReq(id) {
-  deleteReqs([id]);
-}
-
 async function renameReq(id) {
   const r = findReq(id);
   if (!r) return;

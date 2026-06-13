@@ -106,6 +106,15 @@ function defaultMock() {
   return { enabled: false, status: 200, headers: [], body: '', delay: 0 };
 }
 
+/** Color for an HTTP status code: grey if absent (no response yet/network
+ *  error), green for 2xx, orange for 3xx, red for 4xx/5xx. */
+function statusColor(status) {
+  return !status      ? '#8b949e'
+       : status < 300 ? '#3fb950'
+       : status < 400 ? '#fca130'
+       :                '#f85149';
+}
+
 /** Human-readable byte size, e.g. 1536 -> "1.5 KB" */
 function formatBytes(n) {
   if (n == null) return '';

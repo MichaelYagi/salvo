@@ -812,7 +812,7 @@ function authHTML(a) {
 
   if (a.type === 'bearer') {
     html += `
-      <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Token</label>
+      <label style="${AUTH_LABEL_STYLE}">Token</label>
       <input value="${esc(a.token)}" oninput="authSet('token',this.value);showVarSuggest(this)"
              onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
              placeholder="Bearer token…" style="width:100%;font-family:monospace">`;
@@ -822,12 +822,12 @@ function authHTML(a) {
     html += `
       <div class="two-col">
         <div>
-          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Username</label>
+          <label style="${AUTH_LABEL_STYLE}">Username</label>
           <input value="${esc(a.username)}" oninput="authSet('username',this.value);showVarSuggest(this)"
                  onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
         <div>
-          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Password</label>
+          <label style="${AUTH_LABEL_STYLE}">Password</label>
           <input type="password" value="${esc(a.password)}" oninput="authSet('password',this.value);showVarSuggest(this)"
                  onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()" style="width:100%">
         </div>
@@ -838,13 +838,13 @@ function authHTML(a) {
     html += `
       <div class="two-col">
         <div>
-          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Header Name</label>
+          <label style="${AUTH_LABEL_STYLE}">Header Name</label>
           <input value="${esc(a.apiKey)}" oninput="authSet('apiKey',this.value);showVarSuggest(this)"
                  onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
                  placeholder="X-API-Key" style="width:100%;font-family:monospace">
         </div>
         <div>
-          <label style="display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px">Value</label>
+          <label style="${AUTH_LABEL_STYLE}">Value</label>
           <input value="${esc(a.apiValue)}" oninput="authSet('apiValue',this.value);showVarSuggest(this)"
                  onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
                  style="width:100%;font-family:monospace">
@@ -1120,7 +1120,7 @@ function examplesHTML(req) {
   }
 
   return `<div class="examples-list">` + req.examples.map(ex => {
-    const color = ex.status < 300 ? '#3fb950' : ex.status < 400 ? '#fca130' : '#f85149';
+    const color = statusColor(ex.status);
     return `
       <div class="example-item">
         <span class="example-name">${esc(ex.name)}</span>

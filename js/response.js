@@ -45,10 +45,10 @@ function renderRespPanel() {
   }
 
   // Status badge
-  const statusColor = resp.status < 300 ? '#3fb950' : resp.status < 400 ? '#fca130' : '#f85149';
+  const color = statusColor(resp.status);
   badge.style.display    = '';
-  badge.style.background = statusColor + '22';
-  badge.style.color      = statusColor;
+  badge.style.background = color + '22';
+  badge.style.color      = color;
   badge.className        = 'status-badge';
   badge.textContent      = `${resp.status} ${resp.statusText}`;
 
@@ -58,7 +58,7 @@ function renderRespPanel() {
 
   if (resp.size != null) {
     sizeEl.style.display = '';
-    sizeEl.textContent   = resp.size < 1024 ? resp.size + ' B' : (resp.size / 1024).toFixed(1) + ' KB';
+    sizeEl.textContent   = formatBytes(resp.size);
   } else {
     sizeEl.style.display = 'none';
   }
