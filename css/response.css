@@ -31,6 +31,7 @@
 #resp-body-wrap {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   padding: 12px;
   font-family: monospace;
   font-size: 12px;
@@ -45,14 +46,16 @@
 }
 
 /* ─── JSON Tree ─────────────────────────────────────────────────────────────── */
+/* Rows are absolutely positioned at i * JT_ROW_HEIGHT (see response.js) for
+   virtualized rendering, so height/line-height here must stay in sync with
+   the JT_ROW_HEIGHT constant. */
 .jt-toggle   { cursor: pointer; color: var(--text-muted); user-select: none; font-size: 11px; margin-right: 2px; }
 .jt-key      { color: var(--json-key); }
 .jt-str      { color: var(--json-str); }
 .jt-num      { color: var(--json-num); }
 .jt-bool     { color: var(--json-bool); }
 .jt-null     { color: var(--text-muted); }
-.jt-children { margin-left: 16px; }
-.jt-row      { line-height: 1.8; }
+.jt-row      { position: absolute; left: 0; height: 21px; line-height: 21px; white-space: nowrap; }
 
 .jt-savevar {
   visibility: hidden;

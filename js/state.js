@@ -1,8 +1,3 @@
-// ─── Limits ───────────────────────────────────────────────────────────────────
-// Above this size, JSON responses are shown as raw text instead of being
-// pretty-printed and rendered as an interactive tree (avoids freezing the tab).
-const JSON_TREE_MAX_BYTES = 1_000_000; // 1 MB
-
 // ─── Method colours ───────────────────────────────────────────────────────────
 const MC = {
   GET:     '#61affe',

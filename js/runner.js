@@ -181,7 +181,7 @@ async function runSingleRequest(reqOrig) {
     if (!data.ok) throw new Error(data.error);
 
     const elapsed = Date.now() - start;
-    const resp = parseResponse(data, elapsed);
+    const resp = await parseResponse(data, elapsed);
     result.status     = resp.status;
     result.statusText = resp.statusText;
     result.elapsed    = elapsed;

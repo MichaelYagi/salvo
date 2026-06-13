@@ -21,6 +21,7 @@ function renderRespPanel() {
   const resp    = tab?.resp;
 
   updateTestsBadge(resp);
+  teardownJsonTree(wrap);
 
   // Nothing sent yet
   if (!resp) {
@@ -82,18 +83,12 @@ function renderRespPanel() {
 
     if (resp.bodyType === 'json') {
       try {
-        wrap.innerHTML = '';
-        wrap.appendChild(buildJsonTree(JSON.parse(resp.body), 0));
+        renderJsonTree(wrap, resp.bodyJson);
         return;
       } catch { /* fall through to plain text */ }
     }
 
-    let notice = '';
-    if ((resp.headers['content-type'] || '').includes('json') && resp.size > JSON_TREE_MAX_BYTES) {
-      notice = `<div class="muted" style="margin-bottom:6px">Response is large (${(resp.size / 1024 / 1024).toFixed(1)} MB) — showing raw text instead of the JSON tree.</div>`;
-    }
-
-    wrap.innerHTML = `${notice}<pre>${esc(resp.body)}</pre>`;
+    wrap.innerHTML = `<pre>${esc(resp.body)}</pre>`;
 
   // Headers tab
   } else if (tab.respTab === 'headers') {
@@ -200,95 +195,179 @@ function buildSaveVarBtn(value) {
   return btn;
 }
 
-function buildJsonTree(data, depth) {
-  const wrap = document.createElement('span');
+// Rows are absolutely positioned at `index * JT_ROW_HEIGHT` — keep this in
+// sync with the .jt-row height/line-height in css/response.css.
+const JT_ROW_HEIGHT = 21; // px
+const JT_OVERSCAN   = 10; // extra rows rendered above/below the viewport
 
-  // Primitives
-  if (data === null || typeof data === 'boolean' || typeof data === 'number' || typeof data === 'string') {
-    wrap.className = 'jt-leaf';
-    const valueEl = document.createElement('span');
-    if (data === null)             { valueEl.className = 'jt-null'; valueEl.textContent = 'null';       }
-    else if (typeof data === 'boolean') { valueEl.className = 'jt-bool'; valueEl.textContent = String(data); }
-    else if (typeof data === 'number')  { valueEl.className = 'jt-num';  valueEl.textContent = data;         }
-    else                            { valueEl.className = 'jt-str'; valueEl.textContent = `"${data}"`;  }
-    wrap.appendChild(valueEl);
-    wrap.appendChild(buildSaveVarBtn(data));
-    return wrap;
+// Builds a tree of { open, isArr, children } mirroring `data`'s shape, used
+// to track each object/array's expanded/collapsed state across re-renders.
+// Top two levels start expanded, matching the old recursive tree's default.
+function buildJtState(data, depth) {
+  if (data === null || typeof data !== 'object') return null;
+  const isArr = Array.isArray(data);
+  const keys  = isArr ? data.map((_, i) => i) : Object.keys(data);
+  return {
+    open:  depth < 2,
+    isArr,
+    children: keys.map(k => buildJtState(data[k], depth + 1)),
+  };
+}
+
+function jtPreview(data, isArr) {
+  if (isArr) return `▸ [… ${data.length}]`;
+  const keys = Object.keys(data);
+  return `▸ {${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '…' : ''}}`;
+}
+
+// Walks `data`/`state` and appends one line descriptor per visible row to
+// `lines` — collapsed objects/arrays contribute a single 'collapsed' line,
+// expanded ones contribute an 'open' line, one line per child, and a 'close'
+// line. This flat list is what gets virtualized for rendering.
+function flattenJsonTree(data, state, depth, keyLabel, comma, lines) {
+  if (data === null || typeof data !== 'object') {
+    lines.push({ depth, keyLabel, comma, type: 'leaf', data });
+    return;
   }
 
-  // Arrays & objects
-  const isArr   = Array.isArray(data);
-  const keys    = isArr ? data.map((_, i) => i) : Object.keys(data);
+  const { isArr, children } = state;
+  const keys = isArr ? data.map((_, i) => i) : Object.keys(data);
 
   if (!keys.length) {
-    wrap.textContent  = isArr ? '[]' : '{}';
-    wrap.style.color  = 'var(--text-muted)';
-    return wrap;
+    lines.push({ depth, keyLabel, comma, type: 'empty', isArr });
+    return;
   }
 
-  let open = depth < 2;
-
-  const toggle   = document.createElement('span');
-  toggle.className = 'jt-toggle';
-
-  const openBracket = document.createElement('span');
-  openBracket.style.color = 'var(--text-muted)';
-  openBracket.textContent = isArr ? '[' : '{';
-
-  const children = document.createElement('div');
-  children.className = 'jt-children';
-
-  const closeBracket = document.createElement('span');
-  closeBracket.style.color = 'var(--text-muted)';
-  closeBracket.textContent = isArr ? ']' : '}';
-
-  function preview() {
-    if (isArr) return `▸ [… ${keys.length}]`;
-    const sample = Object.keys(data).slice(0, 3).join(', ');
-    return `▸ {${sample}${Object.keys(data).length > 3 ? '…' : ''}}`;
+  if (!state.open) {
+    lines.push({ depth, keyLabel, comma, type: 'collapsed', isArr, data, state });
+    return;
   }
 
-  function renderToggle() {
-    toggle.textContent           = open ? '▾' : preview();
-    openBracket.style.display    = open ? ''  : 'none';
-    children.style.display       = open ? ''  : 'none';
-    closeBracket.style.display   = open ? ''  : 'none';
-  }
-
+  lines.push({ depth, keyLabel, comma: false, type: 'open', isArr, state });
   keys.forEach((k, i) => {
-    const row = document.createElement('div');
-    row.className = 'jt-row';
-
-    if (!isArr) {
-      const keyEl   = document.createElement('span');
-      keyEl.className   = 'jt-key';
-      keyEl.textContent = `"${k}"`;
-      row.appendChild(keyEl);
-
-      const colon       = document.createElement('span');
-      colon.style.color = 'var(--text-muted)';
-      colon.textContent = ': ';
-      row.appendChild(colon);
-    }
-
-    row.appendChild(buildJsonTree(data[k], depth + 1));
-
-    if (i < keys.length - 1) {
-      const comma       = document.createElement('span');
-      comma.style.color = 'var(--text-muted)';
-      comma.textContent = ',';
-      row.appendChild(comma);
-    }
-
-    children.appendChild(row);
+    flattenJsonTree(data[k], children[i], depth + 1, isArr ? null : k, i < keys.length - 1, lines);
   });
+  lines.push({ depth, keyLabel: null, comma, type: 'close', isArr });
+}
 
-  toggle.addEventListener('click', () => { open = !open; renderToggle(); });
-  renderToggle();
+// Builds the DOM for a single flattened line.
+function buildJtRow(line, onToggle) {
+  const row = document.createElement('div');
+  row.className = 'jt-row';
+  row.style.paddingLeft = (line.depth * 16) + 'px';
 
-  wrap.appendChild(toggle);
-  wrap.appendChild(openBracket);
-  wrap.appendChild(children);
-  wrap.appendChild(closeBracket);
-  return wrap;
+  if (line.keyLabel !== null && line.keyLabel !== undefined) {
+    const keyEl = document.createElement('span');
+    keyEl.className   = 'jt-key';
+    keyEl.textContent = `"${line.keyLabel}"`;
+    row.appendChild(keyEl);
+
+    const colon       = document.createElement('span');
+    colon.style.color = 'var(--text-muted)';
+    colon.textContent = ': ';
+    row.appendChild(colon);
+  }
+
+  if (line.type === 'leaf') {
+    row.classList.add('jt-leaf');
+    const data    = line.data;
+    const valueEl = document.createElement('span');
+    if (data === null)                  { valueEl.className = 'jt-null'; valueEl.textContent = 'null';      }
+    else if (typeof data === 'boolean') { valueEl.className = 'jt-bool'; valueEl.textContent = String(data); }
+    else if (typeof data === 'number')  { valueEl.className = 'jt-num';  valueEl.textContent = data;         }
+    else                                 { valueEl.className = 'jt-str'; valueEl.textContent = `"${data}"`;  }
+    row.appendChild(valueEl);
+    row.appendChild(buildSaveVarBtn(data));
+
+  } else if (line.type === 'empty') {
+    const span = document.createElement('span');
+    span.style.color  = 'var(--text-muted)';
+    span.textContent  = line.isArr ? '[]' : '{}';
+    row.appendChild(span);
+
+  } else if (line.type === 'collapsed') {
+    const toggle = document.createElement('span');
+    toggle.className   = 'jt-toggle';
+    toggle.textContent = jtPreview(line.data, line.isArr);
+    toggle.addEventListener('click', () => { line.state.open = true; onToggle(); });
+    row.appendChild(toggle);
+
+  } else if (line.type === 'open') {
+    const toggle = document.createElement('span');
+    toggle.className   = 'jt-toggle';
+    toggle.textContent = '▾';
+    toggle.addEventListener('click', () => { line.state.open = false; onToggle(); });
+    row.appendChild(toggle);
+
+    const bracket       = document.createElement('span');
+    bracket.style.color = 'var(--text-muted)';
+    bracket.textContent = line.isArr ? '[' : '{';
+    row.appendChild(bracket);
+
+  } else if (line.type === 'close') {
+    const bracket       = document.createElement('span');
+    bracket.style.color = 'var(--text-muted)';
+    bracket.textContent = line.isArr ? ']' : '}';
+    row.appendChild(bracket);
+  }
+
+  if (line.comma) {
+    const comma       = document.createElement('span');
+    comma.style.color = 'var(--text-muted)';
+    comma.textContent = ',';
+    row.appendChild(comma);
+  }
+
+  return row;
+}
+
+// Removes any scroll/resize listeners left over from a previously rendered
+// JSON tree — called at the top of renderRespPanel() before repurposing
+// `wrap` for a different tab/body type.
+function teardownJsonTree(wrap) {
+  if (wrap._jtScrollHandler)  { wrap.removeEventListener('scroll', wrap._jtScrollHandler); wrap._jtScrollHandler = null; }
+  if (wrap._jtResizeObserver) { wrap._jtResizeObserver.disconnect(); wrap._jtResizeObserver = null; }
+}
+
+// Renders `data` as a collapsible JSON tree inside `wrap` (#resp-body-wrap),
+// virtualizing rows so only those visible in the scrollable viewport (plus a
+// small overscan buffer) are ever present in the DOM — large responses stay
+// fast to render and scroll.
+function renderJsonTree(wrap, data) {
+  const rootState = buildJtState(data, 0);
+
+  wrap.innerHTML = '';
+  const spacer = document.createElement('div');
+  spacer.style.position = 'relative';
+  wrap.appendChild(spacer);
+
+  let lines = [];
+
+  function render() {
+    spacer.style.height = (lines.length * JT_ROW_HEIGHT) + 'px';
+
+    const start = Math.max(0, Math.floor(wrap.scrollTop / JT_ROW_HEIGHT) - JT_OVERSCAN);
+    const end   = Math.min(lines.length, Math.ceil((wrap.scrollTop + wrap.clientHeight) / JT_ROW_HEIGHT) + JT_OVERSCAN);
+
+    spacer.innerHTML = '';
+    for (let i = start; i < end; i++) {
+      const row    = buildJtRow(lines[i], reflow);
+      row.style.top = (i * JT_ROW_HEIGHT) + 'px';
+      spacer.appendChild(row);
+    }
+  }
+
+  function reflow() {
+    lines = [];
+    flattenJsonTree(data, rootState, 0, null, false, lines);
+    render();
+  }
+
+  wrap._jtScrollHandler = render;
+  wrap.addEventListener('scroll', wrap._jtScrollHandler);
+
+  wrap._jtResizeObserver = new ResizeObserver(render);
+  wrap._jtResizeObserver.observe(wrap);
+
+  reflow();
 }

@@ -52,7 +52,7 @@ async function sendRequest() {
     if (!data.ok) throw new Error(data.error);
 
     const elapsed = Date.now() - start;
-    tab.resp      = parseResponse(data, elapsed);
+    tab.resp      = await parseResponse(data, elapsed);
 
     // Log to history
     state.hist.push({
@@ -268,7 +268,21 @@ function base64ToBytes(b64) {
   return bytes;
 }
 
-function parseResponse(data, elapsed) {
+// Parses and pretty-prints JSON text in a Web Worker so large response
+// bodies don't block the UI thread. Resolves to { value, pretty }, or null
+// if `text` isn't valid JSON.
+function parseJsonOffMainThread(text) {
+  return new Promise(resolve => {
+    const worker = new Worker('js/json-worker.js');
+    worker.onmessage = e => {
+      worker.terminate();
+      resolve(e.data.ok ? { value: e.data.value, pretty: e.data.pretty } : null);
+    };
+    worker.postMessage(text);
+  });
+}
+
+async function parseResponse(data, elapsed) {
   const respHeaders = data.headers || {};
   const ct          = respHeaders['content-type'] || '';
   const bytes       = base64ToBytes(data.bodyBase64);
@@ -301,9 +315,11 @@ function parseResponse(data, elapsed) {
 
   let text     = new TextDecoder('utf-8').decode(bytes);
   let bodyType = 'text';
+  let bodyJson;
 
-  if (ct.includes('json') && bytes.length <= JSON_TREE_MAX_BYTES) {
-    try { text = JSON.stringify(JSON.parse(text), null, 2); bodyType = 'json'; } catch {}
+  if (ct.includes('json')) {
+    const parsed = await parseJsonOffMainThread(text);
+    if (parsed) { text = parsed.pretty; bodyJson = parsed.value; bodyType = 'json'; }
   }
 
   return {
@@ -311,6 +327,7 @@ function parseResponse(data, elapsed) {
     statusText: data.statusText,
     headers:    respHeaders,
     body:       text,
+    bodyJson,
     bodyType,
     elapsed,
     size:       bytes.length,
@@ -378,7 +395,7 @@ function buildPmApi(req, resp) {
       statusText:   resp.statusText,
       headers:      resp.headers,
       responseTime: resp.elapsed,
-      json:  () => JSON.parse(resp.body),
+      json:  () => resp.bodyJson !== undefined ? resp.bodyJson : JSON.parse(resp.body),
       text:  () => resp.body,
     };
   }
