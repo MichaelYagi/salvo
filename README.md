@@ -6,6 +6,55 @@ Salvo is just a small Node server and some plain HTML/JS/CSS. Clone it, run one 
 
 No npm install, no Docker, no sign-up, no rate limits, no paywalled "team" features. MIT licensed — use it, fork it, ship it.
 
+## Running it
+
+Salvo needs its local server — it's what reads/writes `data/` and proxies outbound requests.
+
+```bash
+node server.js
+```
+
+Then open `http://localhost:5874`. No `npm install`, no dependencies — `server.js` only uses Node's standard library.
+
+To use a different port, pass `--port=<port>` (or set the `PORT` env var):
+
+```bash
+node server.js --port=3000
+```
+
+### Sharing `data/` (local-network sync)
+
+By default Salvo reads/writes `data/` next to `server.js`. Pass `--data-dir=<path>` (or set `SALVO_DATA_DIR`) to point it at a different folder — e.g. a Dropbox/Google Drive folder, a network share, or a separate git repo — so multiple machines or teammates can work from the same collections, environments, and history:
+
+```bash
+node server.js --data-dir=/path/to/shared/salvo-data
+```
+
+There's no real-time sync or accounts — it's the same wipe-and-rewrite-on-save model described below, just pointed at a folder that something else (Dropbox, a sync tool, git) keeps in sync between machines. Avoid running two instances against the same `data/` at the same time, since the last save wins.
+
+## Table of Contents
+
+- [Features](#features)
+- [Project structure](#project-structure)
+- [Data storage (`data/`)](#data-storage-data)
+  - [Request shape](#request-shape)
+- [Environment variables](#environment-variables)
+  - [Global variables](#global-variables)
+  - [Saving response values as variables](#saving-response-values-as-variables)
+- [Bulk Edit](#bulk-edit)
+- [Auth types](#auth-types)
+- [Pre-request & Test Scripts](#pre-request--test-scripts)
+  - [`pm` API](#pm-api)
+- [Collection Runner](#collection-runner)
+  - [Data-driven runs (CSV/JSON)](#data-driven-runs-csvjson)
+- [Mock Server](#mock-server)
+- [Cookie Jar](#cookie-jar)
+- [Tabs](#tabs)
+- [Export / Import](#export--import)
+- [Tests](#tests)
+- [No build step](#no-build-step)
+- [License](#license)
+
 ## Features
 
 - **Collections** — organise requests into collections and folders. Import Postman v2.x JSON, or Salvo's own export format. Right-click a request to rename, duplicate, copy its URL, move it, or delete it; right-click a collection or folder to add requests/folders, run them, edit a description, rename, export, or delete.
@@ -40,32 +89,6 @@ No npm install, no Docker, no sign-up, no rate limits, no paywalled "team" featu
 - **Export / Import** — export all collections to a single JSON file (or a single collection, as Salvo or Postman v2.1.0 JSON, via its right-click menu), share it with a team, and import it elsewhere. Imports accept a Salvo export, a Postman collection, or a Postman environment, and merge with existing collections/environments by name, skipping requests with duplicate names.
 - **Auto-save** — every change is saved to disk automatically (debounced), with a save-status indicator in the topbar. `Ctrl+S`/`Cmd+S` still works for an explicit save.
 - **About** — click the Salvo logo/title in the topbar for an About modal with a short description and the MIT license text.
-
-## Running it
-
-Salvo needs its local server — it's what reads/writes `data/` and proxies outbound requests.
-
-```bash
-node server.js
-```
-
-Then open `http://localhost:5874`. No `npm install`, no dependencies — `server.js` only uses Node's standard library.
-
-To use a different port, pass `--port=<port>` (or set the `PORT` env var):
-
-```bash
-node server.js --port=3000
-```
-
-### Sharing `data/` (local-network sync)
-
-By default Salvo reads/writes `data/` next to `server.js`. Pass `--data-dir=<path>` (or set `SALVO_DATA_DIR`) to point it at a different folder — e.g. a Dropbox/Google Drive folder, a network share, or a separate git repo — so multiple machines or teammates can work from the same collections, environments, and history:
-
-```bash
-node server.js --data-dir=/path/to/shared/salvo-data
-```
-
-There's no real-time sync or accounts — it's the same wipe-and-rewrite-on-save model described below, just pointed at a folder that something else (Dropbox, a sync tool, git) keeps in sync between machines. Avoid running two instances against the same `data/` at the same time, since the last save wins.
 
 ## Project structure
 
