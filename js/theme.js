@@ -7,7 +7,7 @@ const THEMES = [
   { id: 'dark',  name: 'Dark',  swatch: ['#0d1117', '#58a6ff', '#c9d1d9'] },
   { id: 'light', name: 'Light', swatch: ['#ffffff', '#0969da', '#1f2328'] },
   { id: 'nord',  name: 'Nord',  swatch: ['#2e3440', '#88c0d0', '#d8dee9'] },
-  { id: 'carnival', name: 'Carnival', swatch: ['#1a1025', '#ffb627', '#ff6ec7'] },
+  { id: 'carnival', name: 'Carnival', swatch: ['#1a1025', '#ffb627', '#ede4f5'] },
 ];
 
 function getTheme() {
