@@ -128,7 +128,7 @@ async function init() {
     opt.style.color = MC[opt.value] || 'var(--text)';
   });
 
-  refreshCookieJar();
+  refreshCookieJar().then(() => { if (activeTab()?.reqTab === 'headers') renderReqPanel(); });
   refreshMockServerStatus();
   renderEnvSelect();
   renderSidebar();
