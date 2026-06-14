@@ -1137,9 +1137,13 @@ function viewExample(id) {
   const tab = activeTab();
   const ex = tab.req.examples.find(e => e.id === id);
   if (!ex) return;
+  let bodyJson = ex.bodyJson;
+  if (bodyJson === undefined && ex.bodyType === 'json') {
+    try { bodyJson = JSON.parse(ex.body); } catch {}
+  }
   tab.resp = {
     status: ex.status, statusText: ex.statusText, headers: ex.headers,
-    body: ex.body, bodyType: ex.bodyType, elapsed: 0, size: ex.body?.length ?? null,
+    body: ex.body, bodyJson, bodyType: ex.bodyType, elapsed: 0, size: ex.body?.length ?? null,
   };
   tab.respTab = 'body';
   document.querySelectorAll('[data-rtab]').forEach(t => t.classList.toggle('active', t.dataset.rtab === 'body'));

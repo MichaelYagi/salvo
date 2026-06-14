@@ -155,7 +155,7 @@ async function saveResponseAsExample() {
   tab.req.examples.push({
     id: uid(), name,
     status: resp.status, statusText: resp.statusText,
-    headers: resp.headers, body: resp.body, bodyType: resp.bodyType,
+    headers: resp.headers, body: resp.body, bodyJson: resp.bodyJson, bodyType: resp.bodyType,
     createdAt: Date.now(),
   });
 
