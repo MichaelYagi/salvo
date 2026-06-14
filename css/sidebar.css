@@ -151,7 +151,7 @@
 }
 
 .req-menu-btn {
-  display: none;
+  visibility: hidden;
   background: none;
   border: none;
   border-radius: 4px;
@@ -168,7 +168,7 @@
   color: var(--text);
 }
 .req-row:hover .req-menu-btn,
-.req-row.selected .req-menu-btn { display: block; }
+.req-row.selected .req-menu-btn { visibility: visible; }
 
 /* ─── Drag & drop ────────────────────────────────────────────────────────────── */
 .req-row[draggable], .folder-header[draggable], .col-header[draggable] { cursor: grab; }
