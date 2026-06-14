@@ -78,12 +78,10 @@ function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-/** Maps a raw body's contentType ('json'|'xml'|'html'|'text') to its MIME type */
-function rawContentTypeHeader(contentType) {
-  return contentType === 'json' ? 'application/json'
-       : contentType === 'xml'  ? 'application/xml'
-       : contentType === 'html' ? 'text/html'
-       :                          'text/plain';
+// Has the user unchecked this auto-generated header (Authorization, Cookie, etc.)
+// on the Headers tab's "Auto-generated" section? Checked by default.
+function isAutoHeaderDisabled(req, key) {
+  return (req.disabledAutoHeaders || []).some(k => k.toLowerCase() === key.toLowerCase());
 }
 
 /** Default shape for Request.auth — covers all supported auth types */

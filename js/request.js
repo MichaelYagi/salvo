@@ -503,10 +503,7 @@ function computedBodyHeaders(req) {
   if (hasContentType) return [];
 
   const b = req.body;
-  if (b.type === 'raw' && b.raw)  return [{ key: 'Content-Type', value: rawContentTypeHeader(b.contentType) }];
-  if (b.type === 'formdata')      return [{ key: 'Content-Type', value: 'multipart/form-data; boundary=...' }];
-  if (b.type === 'urlencoded')    return [{ key: 'Content-Type', value: 'application/x-www-form-urlencoded' }];
-  if (b.type === 'binary' && b.binaryMimeType) return [{ key: 'Content-Type', value: b.binaryMimeType }];
+  if (b.type === 'formdata') return [{ key: 'Content-Type', value: 'multipart/form-data; boundary=...' }];
   return [];
 }
 
@@ -679,17 +676,20 @@ function kvComputedSectionsHTML(key) {
   }
 
   if (key === 'headers') {
-    const computed = computedHeaders(activeTab().req);
+    const req = activeTab().req;
+    const computed = computedHeaders(req);
     if (computed.length) {
       html += `<div class="kv-computed-label">Auto-generated</div>`;
       computed.forEach(h => {
+        const enabled = !isAutoHeaderDisabled(req, h.key);
+        const op = enabled ? 1 : .45;
         html += `
           <div class="kv-grid-notes kv-computed">
             <span></span>
-            <input type="checkbox" checked disabled>
-            <input value="${esc(h.key)}" disabled>
-            <input value="${esc(h.value)}" disabled>
-            <input value="" disabled class="kv-note" placeholder="${esc(h.source)}">
+            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleAutoHeader('${esc(h.key)}',this.checked)">
+            <input value="${esc(h.key)}" disabled style="opacity:${op}">
+            <input value="${esc(h.value)}" disabled style="opacity:${op}">
+            <input value="" disabled class="kv-note" placeholder="${esc(h.source)}" style="opacity:${op}">
             <span></span>
           </div>`;
       });
@@ -707,6 +707,18 @@ function getKvTarget(key) {
   if (key === 'headers')     return r.headers;
   if (key === 'formData')    return r.body.formData;
   if (key === 'mockHeaders') return r.mock.headers;
+}
+
+// Toggling an "Auto-generated" header's checkbox records its key in
+// req.disabledAutoHeaders so send.js can skip adding it. Checked (enabled) by default.
+function toggleAutoHeader(key, enabled) {
+  const req = activeTab().req;
+  const disabled = new Set((req.disabledAutoHeaders || []).map(k => k.toLowerCase()));
+  if (enabled) disabled.delete(key.toLowerCase());
+  else disabled.add(key.toLowerCase());
+  req.disabledAutoHeaders = [...disabled];
+  scheduleAutoSave(); updateTabBadges();
+  renderReqPanel();
 }
 
 function kvToggle(key, i, v) {

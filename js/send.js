@@ -44,7 +44,10 @@ async function sendRequest() {
     const proxyRes = await fetch('/api/proxy', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ url: builtUrl, method: tab.req.method, headers, bodyKind, body: bodyPayload, digestAuth }),
+      body:    JSON.stringify({
+        url: builtUrl, method: tab.req.method, headers, bodyKind, body: bodyPayload, digestAuth,
+        skipCookieJar: isAutoHeaderDisabled(tab.req, 'Cookie'),
+      }),
       signal:  tab.abortCtrl.signal,
     });
 
@@ -120,23 +123,23 @@ async function buildRequestArgs(req) {
   const auth = req.auth;
   let digestAuth = null;
 
-  if (auth.type === 'bearer' && auth.token) {
+  if (auth.type === 'bearer' && auth.token && !isAutoHeaderDisabled(req, 'Authorization')) {
     headers['Authorization'] = `Bearer ${interp(auth.token)}`;
   }
-  if (auth.type === 'basic') {
+  if (auth.type === 'basic' && !isAutoHeaderDisabled(req, 'Authorization')) {
     headers['Authorization'] = `Basic ${btoa(`${auth.username}:${auth.password}`)}`;
   }
-  if (auth.type === 'apikey' && auth.apiKey) {
+  if (auth.type === 'apikey' && auth.apiKey && !isAutoHeaderDisabled(req, interp(auth.apiKey))) {
     headers[auth.apiKey] = auth.apiValue;
   }
-  if (auth.type === 'oauth2_cc' || auth.type === 'oauth2_pwd') {
+  if ((auth.type === 'oauth2_cc' || auth.type === 'oauth2_pwd') && !isAutoHeaderDisabled(req, 'Authorization')) {
     const token = await ensureOAuthToken(auth);
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
   if (auth.type === 'digest' && (auth.username || auth.password)) {
     digestAuth = { username: interp(auth.username), password: interp(auth.password) };
   }
-  if (auth.type === 'jwt' && auth.jwtSecret) {
+  if (auth.type === 'jwt' && auth.jwtSecret && !isAutoHeaderDisabled(req, 'Authorization')) {
     const jwt = await buildJwt(interp(auth.jwtSecret), auth.jwtPayload);
     headers['Authorization'] = `Bearer ${jwt}`;
   }
@@ -149,9 +152,6 @@ async function buildRequestArgs(req) {
   if (bt === 'raw' && req.body.raw) {
     bodyKind    = 'raw';
     bodyPayload = interp(req.body.raw);
-    if (!headers['Content-Type'] && !headers['content-type']) {
-      headers['Content-Type'] = rawContentTypeHeader(req.body.contentType);
-    }
   } else if (bt === 'formdata') {
     bodyKind    = 'formdata';
     bodyPayload = req.body.formData
@@ -162,17 +162,11 @@ async function buildRequestArgs(req) {
   } else if (bt === 'binary') {
     bodyKind    = 'binary';
     bodyPayload = { fileName: req.body.fileName, fileData: req.body.fileData, fileMimeType: req.body.binaryMimeType };
-    if (!headers['Content-Type'] && !headers['content-type'] && req.body.binaryMimeType) {
-      headers['Content-Type'] = req.body.binaryMimeType;
-    }
   } else if (bt === 'urlencoded') {
     bodyKind    = 'urlencoded';
     bodyPayload = req.body.formData
       .filter(f => f.enabled && f.key)
       .map(f => ({ key: interp(f.key), value: interp(f.value) }));
-    if (!headers['Content-Type']) {
-      headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    }
   }
 
   return { url: urlObj.toString(), headers, bodyKind, bodyPayload, digestAuth };

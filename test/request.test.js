@@ -60,6 +60,7 @@ function makeReq(overrides = {}) {
     description: '', comments: [],
     mock: { enabled: false, status: 200, headers: [], body: '', delay: 0 },
     examples: [],
+    disabledAutoHeaders: [],
     ...overrides,
   };
 }
@@ -122,6 +123,42 @@ test('computedAuthHeaders reflects the Auth tab (Bearer)', () => {
   assert.deepEqual(sandbox.computedAuthHeaders(auth), [{ key: 'Authorization', value: 'Bearer abc123' }]);
 });
 
+// ─── Auto-generated header opt-out (disabledAutoHeaders) ────────────────────
+
+test('isAutoHeaderDisabled is false by default and true once a key is recorded (case-insensitive)', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ disabledAutoHeaders: ['Authorization'] });
+  assert.strictEqual(sandbox.isAutoHeaderDisabled(req, 'Authorization'), true);
+  assert.strictEqual(sandbox.isAutoHeaderDisabled(req, 'authorization'), true);
+  assert.strictEqual(sandbox.isAutoHeaderDisabled(req, 'Cookie'), false);
+});
+
+test('toggleAutoHeader records/clears a disabled auto-header on the active request', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ auth: { type: 'bearer', token: 'abc123' } });
+  sandbox.setActiveTab({ ...makeTab(req), reqTab: 'headers' });
+  sandbox.document.getElementById = () => makeMockEl();
+
+  sandbox.toggleAutoHeader('Authorization', false);
+  assert.deepEqual(req.disabledAutoHeaders, ['authorization']);
+
+  sandbox.toggleAutoHeader('Authorization', true);
+  assert.deepEqual(req.disabledAutoHeaders, []);
+});
+
+test('kvComputedSectionsHTML renders the Auto-generated checkbox checked by default, unchecked once disabled', () => {
+  const sandbox = loadSandbox();
+  const req = makeReq({ auth: { type: 'bearer', token: 'abc123' } });
+  sandbox.setActiveTab(makeTab(req));
+
+  let html = sandbox.kvComputedSectionsHTML('headers');
+  assert.match(html, /<input type="checkbox" checked onchange="toggleAutoHeader\('Authorization',this\.checked\)">/);
+
+  req.disabledAutoHeaders = ['authorization'];
+  html = sandbox.kvComputedSectionsHTML('headers');
+  assert.match(html, /<input type="checkbox"  onchange="toggleAutoHeader\('Authorization',this\.checked\)">/);
+});
+
 test('computedCookieHeader adds a Cookie header for cookies matching the request URL', () => {
   const sandbox = loadSandbox();
   const req = makeReq({ url: 'https://api.example.com/widgets' });
@@ -147,7 +184,7 @@ test('computedCookieHeader excludes expired and cross-domain cookies', () => {
   assert.deepEqual(sandbox.computedCookieHeader(req), []);
 });
 
-test('computedHeaders combines Auth, Body, and Cookie Jar sources', () => {
+test('computedHeaders combines Auth and Cookie Jar sources (raw body Content-Type is not auto-generated)', () => {
   const sandbox = loadSandbox();
   const req = makeReq({
     url: 'https://api.example.com/widgets',
@@ -160,7 +197,6 @@ test('computedHeaders combines Auth, Body, and Cookie Jar sources', () => {
   const headers = sandbox.computedHeaders(req);
   assert.deepEqual(headers, [
     { key: 'Authorization', value: 'Bearer tok', source: 'Auth tab' },
-    { key: 'Content-Type', value: 'application/json', source: 'Body tab' },
     { key: 'Cookie', value: 'session=abc', source: 'Cookie Jar' },
   ]);
 });
@@ -252,7 +288,7 @@ test('kvAdd("formData") defaults new rows to type "text"', () => {
 
 // ─── Binary body type ────────────────────────────────────────────────────────
 
-test('bodyHTML renders a file picker for the binary body type and computedBodyHeaders adds its Content-Type', () => {
+test('bodyHTML renders a file picker for the binary body type (Content-Type is not auto-generated)', () => {
   const sandbox = loadSandbox();
   const body = { type: 'binary', raw: '', formData: [], fileName: 'data.bin', fileSize: 1536, binaryMimeType: 'application/octet-stream', fileData: 'AAA=' };
   const req = makeReq({ body });
@@ -264,7 +300,7 @@ test('bodyHTML renders a file picker for the binary body type and computedBodyHe
   assert.match(html, /1\.5 KB/);
   assert.match(html, /Content-Type:.*application\/octet-stream/);
 
-  assert.deepEqual(sandbox.computedBodyHeaders(req), [{ key: 'Content-Type', value: 'application/octet-stream' }]);
+  assert.deepEqual(sandbox.computedBodyHeaders(req), []);
 });
 
 // ─── Mock server path extraction & per-request mock config ──────────────────

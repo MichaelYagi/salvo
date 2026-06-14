@@ -17,6 +17,7 @@ function normalizeReq(r) {
     comments: r.comments || [],
     mock: { ...defaultMock(), ...(r.mock || {}) },
     examples: r.examples || [],
+    disabledAutoHeaders: r.disabledAutoHeaders || [],
   };
 }
 

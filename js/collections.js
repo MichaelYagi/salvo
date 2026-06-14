@@ -170,6 +170,7 @@ function newRequestTemplate() {
     comments: [],
     mock: defaultMock(),
     examples: [],
+    disabledAutoHeaders: [],
   };
 }
 

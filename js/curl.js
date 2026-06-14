@@ -48,10 +48,6 @@ function buildCurl() {
   // Body
   const body = r.body;
   if (body.type === 'raw' && body.raw) {
-    const hasContentType = r.headers.some(h => h.enabled && h.key.toLowerCase() === 'content-type');
-    if (!hasContentType) {
-      parts.push(`-H 'Content-Type: ${rawContentTypeHeader(body.contentType)}'`);
-    }
     const escaped = interp(body.raw).replace(/'/g, `'\\''`);
     parts.push(`-d '${escaped}'`);
   }
@@ -70,9 +66,6 @@ function buildCurl() {
     if (pairs) parts.push(`--data-urlencode '${pairs}'`);
   }
   if (body.type === 'binary' && body.fileName) {
-    if (!r.headers.some(h => h.enabled && h.key.toLowerCase() === 'content-type') && body.binaryMimeType) {
-      parts.push(`-H 'Content-Type: ${body.binaryMimeType}'`);
-    }
     parts.push(`--data-binary '@${body.fileName}'`);
   }
 

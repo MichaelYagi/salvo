@@ -550,8 +550,8 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       let url, method;
       try {
-        let headers, reqBody, bodyKind, digestAuth;
-        ({ url, method, headers, body: reqBody, bodyKind, digestAuth } = JSON.parse(body));
+        let headers, reqBody, bodyKind, digestAuth, skipCookieJar;
+        ({ url, method, headers, body: reqBody, bodyKind, digestAuth, skipCookieJar } = JSON.parse(body));
 
         function buildFetchBody() {
           if (bodyKind === 'raw') return reqBody;
@@ -579,7 +579,7 @@ const server = http.createServer((req, res) => {
 
         // Attach cookies from the jar that match this request's URL.
         const reqUrl = new URL(url);
-        const jar     = loadCookies();
+        const jar     = skipCookieJar ? [] : loadCookies();
         const matched = jar.filter(c => cookieMatches(c, reqUrl));
         if (matched.length) {
           const cookieStr  = matched.map(c => `${c.name}=${c.value}`).join('; ');
