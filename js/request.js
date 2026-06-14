@@ -42,12 +42,19 @@ function onMethodChange() {
   scheduleAutoSave();
   renderTabStrip();
   if (tab.reqTab === 'curl') renderReqPanel();
+
+  const r = findReq(tab.reqId);
+  if (r) { r.method = v; renderSidebar(); }
 }
 
 function onReqNameChange(v) {
-  activeTab().req.name = v;
+  const tab = activeTab();
+  tab.req.name = v;
   scheduleAutoSave();
   renderTabStrip();
+
+  const r = findReq(tab.reqId);
+  if (r) { r.name = v; renderSidebar(); }
 }
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
