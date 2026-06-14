@@ -404,6 +404,9 @@ function reqCtx(event, reqId) {
   event.preventDefault();
   event.stopPropagation();
 
+  document.querySelectorAll('.req-row.ctx-open').forEach(el => el.classList.remove('ctx-open'));
+  event.currentTarget.closest('.req-row')?.classList.add('ctx-open');
+
   if (!state.selectedReqIds.has(reqId)) {
     state.selectedReqIds = new Set();
     state.lastSelReqId   = reqId;
@@ -457,4 +460,5 @@ function showCtxMenu(x, y, items) {
 
 function hideCtxMenu() {
   document.getElementById('ctx-menu').style.display = 'none';
+  document.querySelectorAll('.req-row.ctx-open').forEach(el => el.classList.remove('ctx-open'));
 }

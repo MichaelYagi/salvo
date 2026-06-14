@@ -593,7 +593,10 @@ function kvEditorHTML(rows, key) {
     if (isFormData) {
       const isFile = row.type === 'file';
       html += `
-        <div class="kv-grid-formdata${conflict ? ' kv-conflict' : ''}">
+        <div class="kv-grid-formdata${conflict ? ' kv-conflict' : ''}"
+             ondragover="kvRowDragOver(event,'${key}',${i})" ondragleave="kvRowDragLeave(event)"
+             ondrop="kvRowDrop(event,'${key}',${i})">
+          <span class="kv-drag-handle" draggable="true" ondragstart="kvDragStart(event,'${key}',${i})" ondragend="kvDragEnd(event)">&#8942;&#8942;</span>
           <input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="kvToggle('${key}',${i},this.checked)">
           <input value="${esc(row.key)}"
                  onkeydown="varSuggestKeydown(this,event)" onblur="varSuggestBlur()"
@@ -622,7 +625,10 @@ function kvEditorHTML(rows, key) {
 
     html += `
       <div class="${hasNotes ? 'kv-grid-notes' : 'kv-grid'}${conflict ? ' kv-conflict' : ''}"
-           ${conflict ? `title="This header will be overridden by the Auth tab's ${esc(row.key)} value when the request is sent"` : ''}>
+           ${conflict ? `title="This header will be overridden by the Auth tab's ${esc(row.key)} value when the request is sent"` : ''}
+           ondragover="kvRowDragOver(event,'${key}',${i})" ondragleave="kvRowDragLeave(event)"
+           ondrop="kvRowDrop(event,'${key}',${i})">
+        <span class="kv-drag-handle" draggable="true" ondragstart="kvDragStart(event,'${key}',${i})" ondragend="kvDragEnd(event)">&#8942;&#8942;</span>
         <input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="kvToggle('${key}',${i},this.checked)">
         <input value="${esc(row.key)}"
                ${suggestAttrs('key')}
@@ -662,6 +668,7 @@ function kvComputedSectionsHTML(key) {
         html += `
           <div class="kv-grid-notes">
             <span></span>
+            <span></span>
             <input value="${esc(pv.key)}" disabled>
             <input value="${esc(pv.value)}" oninput="pathVarSet(${i},this.value)" placeholder="value">
             <span></span>
@@ -678,6 +685,7 @@ function kvComputedSectionsHTML(key) {
       computed.forEach(h => {
         html += `
           <div class="kv-grid-notes kv-computed">
+            <span></span>
             <input type="checkbox" checked disabled>
             <input value="${esc(h.key)}" disabled>
             <input value="${esc(h.value)}" disabled>
@@ -721,6 +729,62 @@ function kvDel(key, i) {
   if (key === 'params') syncUrlFromParams();
   scheduleAutoSave(); updateTabBadges(); renderReqPanel();
 }
+// ─── KV Row Drag & Drop Reordering ────────────────────────────────────────────
+let _kvDragKey   = null;
+let _kvDragIndex = null;
+
+function kvDragStart(event, key, i) {
+  _kvDragKey   = key;
+  _kvDragIndex = i;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(i));
+}
+
+function kvDragEnd() {
+  _kvDragKey   = null;
+  _kvDragIndex = null;
+  document.querySelectorAll('.kv-grid.drag-over-top, .kv-grid.drag-over-bottom, .kv-grid-notes.drag-over-top, .kv-grid-notes.drag-over-bottom, .kv-grid-formdata.drag-over-top, .kv-grid-formdata.drag-over-bottom')
+    .forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+}
+
+function kvRowDragOver(event, key, i) {
+  if (_kvDragKey !== key || _kvDragIndex === i) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.dataTransfer.dropEffect = 'move';
+  const el     = event.currentTarget;
+  const before = (event.clientY - el.getBoundingClientRect().top) < el.offsetHeight / 2;
+  el.classList.toggle('drag-over-top', before);
+  el.classList.toggle('drag-over-bottom', !before);
+}
+
+function kvRowDragLeave(event) {
+  event.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+}
+
+function kvRowDrop(event, key, i) {
+  if (_kvDragKey !== key || _kvDragIndex === i) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const el     = event.currentTarget;
+  const before = el.classList.contains('drag-over-top');
+  el.classList.remove('drag-over-top', 'drag-over-bottom');
+
+  let to = before ? i : i + 1;
+  if (_kvDragIndex < to) to--;
+  kvReorder(key, _kvDragIndex, to);
+}
+
+function kvReorder(key, from, to) {
+  if (from === to) return;
+  const rows = getKvTarget(key);
+  const [item] = rows.splice(from, 1);
+  rows.splice(to, 0, item);
+  if (key === 'envVars' || key === 'globalVars') { scheduleDiskSave(); renderEnvDetail(); return; }
+  if (key === 'params') syncUrlFromParams();
+  scheduleAutoSave(); updateTabBadges(); renderReqPanel();
+}
+
 function kvAdd(key) {
   const row = { id: uid(), key: '', value: '', enabled: true };
   if (key === 'formData') row.type = 'text';

@@ -168,7 +168,8 @@
   color: var(--text);
 }
 .req-row:hover .req-menu-btn,
-.req-row.selected .req-menu-btn { visibility: visible; }
+.req-row.selected .req-menu-btn,
+.req-row.ctx-open .req-menu-btn { visibility: visible; }
 
 /* ─── Drag & drop ────────────────────────────────────────────────────────────── */
 .req-row[draggable], .folder-header[draggable], .col-header[draggable] { cursor: grab; }
