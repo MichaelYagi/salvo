@@ -152,10 +152,22 @@ async function saveResponseAsExample() {
   if (!name) return;
 
   const resp = tab.resp;
+  let body = resp.body;
+  if (resp.bodyType === 'image') {
+    // resp.body is a blob: URL, only valid for this document's lifetime —
+    // convert to a data: URL so the example survives a page reload.
+    const blob = await fetch(resp.body).then(r => r.blob());
+    body = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  }
+
   tab.req.examples.push({
     id: uid(), name,
     status: resp.status, statusText: resp.statusText,
-    headers: resp.headers, body: resp.body, bodyJson: resp.bodyJson, bodyType: resp.bodyType,
+    headers: resp.headers, body, bodyJson: resp.bodyJson, bodyType: resp.bodyType,
     createdAt: Date.now(),
   });
 
