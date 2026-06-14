@@ -161,6 +161,7 @@ async function saveResponseAsExample() {
 
   scheduleAutoSave();
   updateTabBadges();
+  if (tab.reqTab === 'examples') renderReqPanel();
   notify(`Saved example "${name}"`, 'success');
 }
 
