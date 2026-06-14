@@ -141,13 +141,15 @@ function renderSearchResults(list, query) {
 
 function colHTML(col) {
   const open = state.expandedCols.has(col.id);
+  const multiSelectActive = state.selectedReqIds.size > 0;
+  const dragAttrs = multiSelectActive ? '' :
+    `draggable="true" ondragstart="onDragStart(event,'col','${col.id}')" ondragend="onDragEnd(event)"`;
 
   let html = `
     <div style="position:relative">
-      <div class="col-header" draggable="true" onclick="toggleCol('${col.id}')" oncontextmenu="colCtx(event,'${col.id}')"
-          ondragstart="onDragStart(event,'col','${col.id}')"
+      <div class="col-header" ${dragAttrs} onclick="toggleCol('${col.id}')" oncontextmenu="colCtx(event,'${col.id}')"
           ondragover="onColHeaderDragOver(event,'${col.id}')" ondragleave="onDragLeave(event)"
-          ondrop="onColHeaderDrop(event,'${col.id}')" ondragend="onDragEnd(event)">
+          ondrop="onColHeaderDrop(event,'${col.id}')">
         <span class="col-arrow ${open ? 'open' : ''}">&#9654;</span>
         <span class="col-name">${esc(col.name)}</span>
         <button class="col-add" onclick="event.stopPropagation();addReq('${col.id}')" title="New request">+</button>
@@ -166,12 +168,14 @@ function colHTML(col) {
 
 function folderHTML(colId, folder) {
   const open = state.expandedFolders.has(folder.id);
+  const multiSelectActive = state.selectedReqIds.size > 0;
+  const dragAttrs = multiSelectActive ? '' :
+    `draggable="true" ondragstart="onDragStart(event,'folder','${folder.id}')" ondragend="onDragEnd(event)"`;
 
   let html = `
-    <div class="folder-header" draggable="true" onclick="toggleFolder('${folder.id}')" oncontextmenu="folderCtx(event,'${colId}','${folder.id}')"
-        ondragstart="onDragStart(event,'folder','${folder.id}')"
+    <div class="folder-header" ${dragAttrs} onclick="toggleFolder('${folder.id}')" oncontextmenu="folderCtx(event,'${colId}','${folder.id}')"
         ondragover="onFolderHeaderDragOver(event,'${colId}','${folder.id}')" ondragleave="onDragLeave(event)"
-        ondrop="onFolderHeaderDrop(event,'${colId}','${folder.id}')" ondragend="onDragEnd(event)">
+        ondrop="onFolderHeaderDrop(event,'${colId}','${folder.id}')">
       <span class="col-arrow ${open ? 'open' : ''}">&#9654;</span>
       <span style="font-size:13px">&#128193;</span>
       <span class="folder-name">${esc(folder.name)}</span>
@@ -189,17 +193,19 @@ function reqRowHTML(r, indent, draggable = true) {
   const active   = activeTab()?.reqId === r.id;
   const selected = state.selectedReqIds.has(r.id);
   const color    = MC[r.method] || 'var(--text)';
+  const noDrag   = !draggable || state.selectedReqIds.size > 0;
 
-  const dragAttrs = draggable
-    ? `draggable="true" ondragstart="onDragStart(event,'req','${r.id}')"
-       ondragover="onReqRowDragOver(event,'${r.id}')" ondragleave="onDragLeave(event)"
-       ondrop="onReqRowDrop(event,'${r.id}')" ondragend="onDragEnd(event)"`
-    : '';
+  const handleAttrs = noDrag ? '' :
+    `draggable="true" ondragstart="onDragStart(event,'req','${r.id}')" ondragend="onDragEnd(event)"`;
+
+  const dropAttrs = noDrag ? '' :
+    `ondragover="onReqRowDragOver(event,'${r.id}')" ondragleave="onDragLeave(event)" ondrop="onReqRowDrop(event,'${r.id}')"`;
 
   return `
-    <div class="req-row ${active ? 'active' : ''} ${selected ? 'selected' : ''}" style="padding-left:${indent + 8}px;position:relative"
-        ${dragAttrs}
+    <div class="req-row ${active ? 'active' : ''} ${selected ? 'selected' : ''} ${noDrag ? 'no-drag' : ''}" style="padding-left:${indent + 8}px;position:relative"
+        ${dropAttrs}
         onclick="reqClick(event,'${r.id}')" oncontextmenu="reqCtx(event,'${r.id}')">
+      <span class="req-drag-handle" ${handleAttrs}>&#8942;&#8942;</span>
       <span class="req-check">${selected ? '&#10003;' : ''}</span>
       <span class="req-method" style="color:${color}">${r.method}</span>
       <span class="req-name ${active ? 'active' : ''}">${esc(r.name)}</span>

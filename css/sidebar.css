@@ -150,6 +150,19 @@
   text-align: center;
 }
 
+.req-drag-handle {
+  visibility: hidden;
+  width: 10px;
+  flex-shrink: 0;
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  user-select: none;
+}
+.req-row:not(.no-drag):hover .req-drag-handle { visibility: visible; }
+
 .req-menu-btn {
   visibility: hidden;
   background: none;
@@ -172,7 +185,7 @@
 .req-row.ctx-open .req-menu-btn { visibility: visible; }
 
 /* ─── Drag & drop ────────────────────────────────────────────────────────────── */
-.req-row[draggable], .folder-header[draggable], .col-header[draggable] { cursor: grab; }
+.folder-header[draggable], .col-header[draggable] { cursor: grab; }
 .req-row.drag-over-top,    .folder-header.drag-over-top,    .col-header.drag-over-top    { box-shadow: inset 0 2px 0 0 var(--accent); }
 .req-row.drag-over-bottom, .folder-header.drag-over-bottom, .col-header.drag-over-bottom { box-shadow: inset 0 -2px 0 0 var(--accent); }
 .folder-header.drag-target, .col-header.drag-target, .col-body.drag-target { background: var(--accent-alpha); }
